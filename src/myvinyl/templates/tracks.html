@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}Rate tracks - {{ album.title }} - myvinyl{% endblock %}
+{% block content %}
+<form class="panel" method="post" action="/albums/{{ album.id }}/tracks">
+  <p class="eyebrow">{{ album.artist }}</p>
+  <h1>Rate tracks: {{ album.title }}</h1>
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  {% if tracks %}
+  <div class="table-wrap">
+  <table class="track-form">
+    <thead><tr><th>#</th><th>Track</th><th>Rating</th><th>Note</th></tr></thead>
+    <tbody>
+      {% for t in tracks %}
+      {% set i = loop.index0 %}
+      <tr>
+        <td class="pos">{{ t.position }}</td>
+        <td class="wrap">{{ t.title }}{% if t.duration %} <span class="muted">{{ t.duration }}</span>{% endif %}</td>
+        <td>
+          <select name="rating_{{ i }}" aria-label="Rating for {{ t.title }}">
+            <option value="">&ndash;</option>
+            {% for r in ratings | reverse %}
+            <option value="{{ r }}" {{ "selected" if t.rating == r }}>{{ r | stars }} {{ r }}</option>
+            {% endfor %}
+          </select>
+        </td>
+        <td><input name="note_{{ i }}" value="{{ t.note }}" maxlength="500" aria-label="Note for {{ t.title }}"></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  <div class="actions">
+    <button type="submit">Save track ratings</button>
+    <a href="/albums/{{ album.id }}#tracks">Cancel</a>
+  </div>
+  {% else %}
+  <p class="muted">No tracklist yet. Track ratings use the Discogs tracklist; refresh this album from Discogs first.</p>
+  <p class="actions"><a href="/albums/{{ album.id }}">Back to album</a></p>
+  {% endif %}
+</form>
+{% endblock %}

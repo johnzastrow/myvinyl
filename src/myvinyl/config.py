@@ -18,6 +18,8 @@ class Settings:
     db_path: Path
     # Optional; raises the Discogs rate limit from 25 to 60 requests/min.
     discogs_token: str = field(default="", repr=False)
+    # Re-check Discogs prices for albums older than this many days (0 turns it off).
+    refresh_days: int = 7
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -33,9 +35,13 @@ class Settings:
         discogs_token = os.environ.get("MYVINYL_DISCOGS_TOKEN", "").strip()
         if discogs_token and not re.fullmatch(r"[A-Za-z0-9]{20,100}", discogs_token):
             raise ConfigError("MYVINYL_DISCOGS_TOKEN does not look like a Discogs token.")
+        refresh_raw = os.environ.get("MYVINYL_REFRESH_DAYS", "7").strip()
+        if not re.fullmatch(r"[0-9]{1,3}", refresh_raw) or int(refresh_raw) > 365:
+            raise ConfigError("MYVINYL_REFRESH_DAYS must be a whole number from 0 to 365.")
         return cls(
             secret_key=secret_key,
             password_hash=password_hash,
             db_path=db_path,
             discogs_token=discogs_token,
+            refresh_days=int(refresh_raw),
         )

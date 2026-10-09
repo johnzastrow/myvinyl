@@ -145,6 +145,21 @@ def _price_cents(price) -> int | None:
 # --- Lookup steps ------------------------------------------------------------------------
 
 
+def _pressing_from_result(r: dict) -> Pressing | None:
+    if not isinstance(r, dict) or not isinstance(r.get("id"), int) or r["id"] <= 0:
+        return None
+    return Pressing(
+        release_id=r["id"],
+        title=_text(r.get("title")),
+        year=_int_year(r.get("year")),
+        country=_text(r.get("country"), 100),
+        # Search results list the label first, then every company credit; keep the label.
+        label=next(iter(_str_list(r.get("label"))), "")[:200],
+        catno=_text(r.get("catno"), 100),
+        formats=", ".join(_str_list(r.get("format")))[:200],
+    )
+
+
 def find_pressings(
     client: DiscogsClient, artist: str, title: str, year: int | None
 ) -> list[Pressing]:
@@ -168,27 +183,54 @@ def find_pressings(
     wanted = _normalize(title)
     ranked = []
     for position, r in enumerate(results):
-        if not isinstance(r, dict) or not isinstance(r.get("id"), int) or r["id"] <= 0:
+        pressing = _pressing_from_result(r)
+        if pressing is None or wanted not in _normalize(_text(r.get("title"), 500)):
             continue
-        if wanted not in _normalize(_text(r.get("title"), 500)):
-            continue
-        formats = _str_list(r.get("format"))
-        r_year = _int_year(r.get("year"))
-        unofficial = "Unofficial Release" in formats
-        distance = abs(r_year - year) if year and r_year else 10_000
-        pressing = Pressing(
-            release_id=r["id"],
-            title=_text(r.get("title")),
-            year=r_year,
-            country=_text(r.get("country"), 100),
-            # Search results list the label first, then every company credit; keep the label.
-            label=next(iter(_str_list(r.get("label"))), "")[:200],
-            catno=_text(r.get("catno"), 100),
-            formats=", ".join(formats)[:200],
-        )
+        unofficial = "Unofficial Release" in pressing.formats
+        distance = abs(pressing.year - year) if year and pressing.year else 10_000
         ranked.append(((unofficial, distance, position), pressing))
     ranked.sort(key=lambda item: item[0])  # ties keep Discogs relevance order
     return [p for _, p in ranked]
+
+
+def find_by_identifier(client: DiscogsClient, identifier: str) -> list[dict]:
+    """Vinyl releases matching a barcode, falling back to catalog number.
+
+    Returns form-ready dicts (artist, title, year, label, format) plus pressing details.
+    A barcode can match several pressings (for example black and colored vinyl), so the
+    caller lets you choose when there is more than one.
+    """
+    base = {"type": "release", "format": "Vinyl", "per_page": "25"}
+    digits = re.sub(r"[\s-]", "", identifier)
+    attempts = [{"barcode": digits}] if digits.isdigit() else []
+    attempts.append({"catno": identifier})
+    for extra in attempts:
+        results = client.get("/database/search", {**base, **extra}).get("results")
+        if not isinstance(results, list):
+            continue
+        found = []
+        for r in results:
+            pressing = _pressing_from_result(r)
+            if pressing is None:
+                continue
+            artist, title = split_title(pressing.title)
+            qty = _int_or_none(r.get("format_quantity"))
+            found.append(
+                {
+                    "release_id": pressing.release_id,
+                    "artist": artist,
+                    "title": title,
+                    "year": pressing.year,
+                    "label": pressing.label,
+                    "format": map_format(_str_list(r.get("format")), qty),
+                    "country": pressing.country,
+                    "catno": pressing.catno,
+                    "formats": pressing.formats,
+                }
+            )
+        if found:
+            return found
+    return []
 
 
 def price_pressing(client: DiscogsClient, pressing: Pressing) -> Pressing:
@@ -201,9 +243,46 @@ def price_pressing(client: DiscogsClient, pressing: Pressing) -> Pressing:
     )
 
 
-def enrich(client: DiscogsClient, artist: str, title: str, year: int | None) -> Enrichment | None:
-    """Full lookup. Returns None on no match; raises LOOKUP_ERRORS on API/network failure."""
-    candidates = find_pressings(client, artist, title, year)[:MAX_PRESSINGS]
+def _pressing_from_release(release: dict, fallback: Pressing) -> Pressing:
+    """Fill in any missing pressing details from its full release record."""
+    labels = [lbl for lbl in release.get("labels") or [] if isinstance(lbl, dict)]
+    names = []
+    for f in release.get("formats") or []:
+        if isinstance(f, dict):
+            names += [_text(f.get("name"), 50), *_str_list(f.get("descriptions"))]
+    artists = [a.get("name") for a in release.get("artists") or [] if isinstance(a, dict)]
+    artist = clean_artist(next((a for a in artists if isinstance(a, str)), ""))
+    title = _text(release.get("title"))
+    return replace(
+        fallback,
+        title=fallback.title or (f"{artist} - {title}" if artist else title),
+        year=fallback.year or _int_year(release.get("year")),
+        country=fallback.country or _text(release.get("country"), 100),
+        label=fallback.label or (_text(labels[0].get("name")) if labels else ""),
+        catno=fallback.catno or (_text(labels[0].get("catno"), 100) if labels else ""),
+        formats=fallback.formats or ", ".join(n for n in names if n)[:200],
+    )
+
+
+def enrich(
+    client: DiscogsClient,
+    artist: str,
+    title: str,
+    year: int | None,
+    release_id: int | None = None,
+) -> Enrichment | None:
+    """Full lookup. Returns None on no match; raises LOOKUP_ERRORS on API/network failure.
+
+    With `release_id` (a pressing you picked), that pressing is the match, and the range
+    still covers the other pressings found by artist and title.
+    """
+    candidates = find_pressings(client, artist, title, year)
+    if release_id is not None:
+        pinned = next((p for p in candidates if p.release_id == release_id), None)
+        if pinned is None:
+            pinned = Pressing(release_id, "", None, "", "", "", "")
+        candidates = [pinned] + [p for p in candidates if p.release_id != release_id]
+    candidates = candidates[:MAX_PRESSINGS]
     if not candidates:
         log.info("no Discogs match for %r / %r", artist, title)
         return None
@@ -216,10 +295,10 @@ def enrich(client: DiscogsClient, artist: str, title: str, year: int | None) -> 
             log.warning("Discogs price lookup failed for %s: %s", pressing.release_id, exc)
             pressings.append(pressing)
 
+    release = client.get(f"/releases/{int(pressings[0].release_id)}")
+    pressings[0] = chosen = _pressing_from_release(release, pressings[0])
     prices = sorted(p.price_cents for p in pressings if p.price_cents is not None)
     median = int(statistics.median(prices)) if prices else None
-    chosen = pressings[0]
-    release = client.get(f"/releases/{int(chosen.release_id)}")
     return Enrichment(
         release_id=chosen.release_id,
         # The chosen pressing's price; if it has none for sale, fall back to the range median.
@@ -230,6 +309,90 @@ def enrich(client: DiscogsClient, artist: str, title: str, year: int | None) -> 
         pressings=pressings,
         release=release,
     )
+
+
+# --- Discogs collection import -------------------------------------------------------------
+
+
+def identity(client: DiscogsClient) -> str:
+    """Username of the token's owner (requires a token)."""
+    username = client.get("/oauth/identity").get("username")
+    if not isinstance(username, str) or not re.fullmatch(r"[\w.\-]{1,100}", username):
+        raise ValueError("Discogs did not return a username")
+    return username
+
+
+def collection(client: DiscogsClient, username: str, max_pages: int = 50):
+    """Yield form-ready dicts for every vinyl release in the user's Discogs collection."""
+    user = urllib.parse.quote(username, safe="")
+    page, pages = 1, 1
+    while page <= min(pages, max_pages):
+        data = client.get(
+            f"/users/{user}/collection/folders/0/releases",
+            {"per_page": "100", "page": str(page), "sort": "artist"},
+        )
+        pagination = data.get("pagination") if isinstance(data.get("pagination"), dict) else {}
+        pages = _int_or_none(pagination.get("pages")) or 1
+        releases = data.get("releases") if isinstance(data.get("releases"), list) else []
+        for item in releases:
+            info = item.get("basic_information") if isinstance(item, dict) else None
+            if not isinstance(info, dict) or not isinstance(info.get("id"), int):
+                continue
+            artists = [a.get("name") for a in info.get("artists") or [] if isinstance(a, dict)]
+            labels = [lbl for lbl in info.get("labels") or [] if isinstance(lbl, dict)]
+            names, qty = [], None
+            for f in info.get("formats") or []:
+                if isinstance(f, dict):
+                    names += [_text(f.get("name"), 50), *_str_list(f.get("descriptions"))]
+                    qty = qty or _int_year(f.get("qty"))
+            if "Vinyl" not in names:
+                continue  # myvinyl only tracks vinyl
+            rating = _int_or_none(item.get("rating"))
+            title = _text(info.get("title"))
+            if not title:
+                continue
+            yield {
+                "release_id": info["id"],
+                "artist": clean_artist(next((a for a in artists if isinstance(a, str)), ""))
+                or "Unknown artist",
+                "title": title,
+                "year": _int_year(info.get("year")),
+                "label": _text(labels[0].get("name")) if labels else "",
+                "format": map_format(names, qty),
+                "rating": float(rating) if rating and 1 <= rating <= 5 else None,
+            }
+        page += 1
+
+
+# --- Mapping Discogs values to myvinyl fields ----------------------------------------------
+
+
+def clean_artist(name: str) -> str:
+    """Drop Discogs disambiguation suffixes: 'Jail (17)' -> 'Jail', 'Madonna*' -> 'Madonna'."""
+    return re.sub(r"\s*\(\d+\)$", "", name.strip()).rstrip("*").strip()[:200]
+
+
+def split_title(full: str) -> tuple[str, str]:
+    """Split a search-result title 'Artist - Album' into its parts."""
+    artist, sep, title = full.partition(" - ")
+    return (clean_artist(artist), title.strip()[:200]) if sep else ("", full.strip()[:200])
+
+
+def map_format(names: list[str], qty: int | None) -> str:
+    """Best-effort mapping of Discogs format names onto myvinyl's format list."""
+    if "Box Set" in names:
+        return "Box set"
+    if '7"' in names:
+        return '7"'
+    if '10"' in names:
+        return '10"'
+    if '12"' in names and ("Single" in names or "Maxi-Single" in names):
+        return '12" single'
+    if "EP" in names and "LP" not in names:
+        return "EP"
+    if (qty or 1) >= 2 or names.count("LP") >= 2:
+        return "2xLP"
+    return "LP"
 
 
 # --- Release record -> display data --------------------------------------------------------
@@ -322,3 +485,20 @@ def release_summary(release: dict) -> dict:
         "cover": next((i["uri"] for i in images if i["type"] == "primary"), "")
         or (images[0]["uri"] if images else ""),
     }
+
+
+class DiscogsService:
+    """The Discogs operations the app uses, bundled so tests can swap in a fake."""
+
+    def __init__(self, client: DiscogsClient, has_token: bool) -> None:
+        self.client = client
+        self.has_token = has_token
+
+    def enrich(self, artist, title, year, release_id=None) -> Enrichment | None:
+        return enrich(self.client, artist, title, year, release_id)
+
+    def find_by_identifier(self, identifier: str) -> list[dict]:
+        return find_by_identifier(self.client, identifier)
+
+    def collection(self):
+        yield from collection(self.client, identity(self.client))

@@ -2,6 +2,34 @@
 
 All notable changes to myvinyl. Versions follow [semantic versioning](https://semver.org/).
 
+## 0.5.0 - 2026-10-09
+
+### Added
+- **Pick your pressing.** A **Mine** button on every row of the pressings table pins the
+  album to that pressing; value, metadata, and art follow it, and refreshes keep it.
+  "Let myvinyl pick automatically" undoes it.
+- **Add by barcode or catalog number.** An optional field on the Add form finds the exact
+  pressing on Discogs and fills in artist, title, year, label, and format. When several
+  pressings share a barcode (for example black and colored vinyl), you choose one.
+- **Import from Discogs.** Copies the vinyl in your Discogs collection (requires a token),
+  with pressings already picked and your Discogs star ratings. Safe to re-run: releases
+  already imported are skipped.
+- **Value history.** Every lookup is recorded, and the album page charts value and the
+  low-high range over time. Albums are re-checked automatically when their prices are
+  older than `MYVINYL_REFRESH_DAYS` (default 7; 0 turns it off), a few at a time.
+- **Ratings and reviews.** Rate albums from half a star to 5 stars and write a review;
+  rate each track and add a short note. Ratings show in the collection and sort.
+- CSV export includes pressing picked, barcode/catalog number, rating, and review.
+
+### Changed
+- Discogs lookups now run on a single background worker, so new albums, refreshes, and
+  imports share the rate limit in order. The collection page shows how many are waiting.
+
+### Upgrade notes
+- New columns (`pressing_locked`, `identifier`, `rating`, `review`) and tables
+  (`value_history`, `track_ratings`) are added automatically on startup. History starts
+  with the next lookup of each album.
+
 ## 0.4.0 - 2026-10-09
 
 ### Added

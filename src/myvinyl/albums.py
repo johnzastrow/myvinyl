@@ -80,3 +80,48 @@ def parse_album(form: Mapping) -> tuple[dict, dict[str, str], dict[str, str]]:
         "value_cents": value_cents,
     }
     return data, values, errors
+
+
+# --- Ratings and reviews -------------------------------------------------------------------
+
+RATINGS = [x / 2 for x in range(1, 11)]  # 0.5, 1.0, ... 5.0
+MAX_REVIEW = 5000
+MAX_TRACK_NOTE = 500
+
+
+def parse_rating(raw) -> tuple[float | None, str]:
+    """Return (rating or None, error). Blank means 'not rated'."""
+    text = str(raw or "").strip()
+    if not text:
+        return None, ""
+    try:
+        value = float(text)
+    except ValueError:
+        return None, "Choose a rating from 0.5 to 5 stars."
+    if value not in RATINGS:
+        return None, "Choose a rating from 0.5 to 5 stars."
+    return value, ""
+
+
+def format_stars(rating: float | None) -> str:
+    """3.5 -> '★★★½☆' (text, so it needs no images or scripts)."""
+    if rating is None:
+        return ""
+    full = int(rating)
+    half = rating - full >= 0.5
+    return "★" * full + ("½" if half else "") + "☆" * (5 - full - (1 if half else 0))
+
+
+# --- Barcode / catalog number --------------------------------------------------------------
+
+MAX_IDENTIFIER = 50
+
+
+def parse_identifier(raw) -> tuple[str, str]:
+    """Return (identifier, error). Allows digits, letters, spaces, and - . / only."""
+    text = " ".join(str(raw or "").split())
+    if not text:
+        return "", ""
+    if len(text) > MAX_IDENTIFIER or not all(c.isalnum() or c in " -./" for c in text):
+        return "", "Enter a barcode or catalog number (letters, digits, spaces, - . /)."
+    return text, ""

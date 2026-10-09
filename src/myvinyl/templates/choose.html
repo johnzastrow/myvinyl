@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Choose your pressing - myvinyl{% endblock %}
+{% block content %}
+<section class="panel">
+  <h1>Which pressing is yours?</h1>
+  <p class="muted">{{ matches | length }} vinyl releases on Discogs match <strong>{{ identifier }}</strong>. Pick the one that matches your copy.</p>
+  <div class="table-wrap">
+  <table>
+    <thead>
+      <tr><th>Release</th><th>Year</th><th>Country</th><th>Label</th><th>Cat #</th><th>Format</th><th></th></tr>
+    </thead>
+    <tbody>
+      {% for m in matches %}
+      <tr>
+        <td class="wrap"><strong>{{ m.artist }}</strong> &ndash; {{ m.title }}</td>
+        <td>{{ m.year or "" }}</td>
+        <td>{{ m.country }}</td>
+        <td>{{ m.label }}</td>
+        <td>{{ m.catno }}</td>
+        <td class="wrap">{{ m.formats }} <a class="small" href="https://www.discogs.com/release/{{ m.release_id }}" target="_blank" rel="noopener noreferrer">details</a></td>
+        <td>
+          <form method="post" action="/albums">
+            <input type="hidden" name="csrf" value="{{ csrf }}">
+            <input type="hidden" name="release_id" value="{{ m.release_id }}">
+            <input type="hidden" name="identifier" value="{{ identifier }}">
+            {# Your entries win; blanks are filled from this pressing. #}
+            {% for key in ["artist", "title", "label", "year"] %}
+            <input type="hidden" name="{{ key }}" value="{{ form.get(key) if (form.get(key) or '') | trim else (m[key] or '') }}">
+            {% endfor %}
+            <input type="hidden" name="format" value="{{ m.format }}">
+            {% for key in ["condition", "notes", "value"] %}
+            <input type="hidden" name="{{ key }}" value="{{ form.get(key, '') }}">
+            {% endfor %}
+            <button type="submit">This one</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  <p class="actions"><a href="/albums/new">Start over</a></p>
+</section>
+{% endblock %}

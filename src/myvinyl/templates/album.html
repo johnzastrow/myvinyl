@@ -18,7 +18,9 @@
       <span class="chip">{{ album.format }}</span>
       <span class="chip chip-red">{{ album.condition }}</span>
       {% if album.label %}<span class="chip">{{ album.label }}</span>{% endif %}
+      {% if album.pressing_locked %}<span class="chip">your pressing</span>{% endif %}
     </p>
+    {% if album.rating is not none %}<p class="stars-big" aria-label="Your rating: {{ album.rating }} of 5">{{ album.rating | stars }}</p>{% endif %}
     <div class="actions">
       <a class="button" href="/albums/{{ album.id }}/edit">Edit</a>
       <form method="post" action="/albums/{{ album.id }}/lookup">
@@ -43,7 +45,7 @@
     <p class="big">{{ album.value_cents | money or "Not set" }}</p>
     <p class="hint">
       {% if album.value_source == "manual" %}Entered by you.
-      {% elif album.value_source == "discogs" %}Lowest Discogs asking price for the best-matching pressing
+      {% elif album.value_source == "discogs" %}Lowest Discogs asking price for {{ "your pressing" if album.pressing_locked else "the best-matching pressing" }}
         (<a href="https://www.discogs.com/release/{{ album.discogs_release_id }}" target="_blank" rel="noopener noreferrer">release {{ album.discogs_release_id }}</a>).
       {% else %}No value yet.{% endif %}
     </p>
@@ -66,6 +68,41 @@
     <p class="hint">{% if release.rating %}Rated {{ "%.2f" | format(release.rating) }} / 5 by {{ release.rating_count }}{% else %}No ratings{% endif %}</p>
   </div>
   {% endif %}
+</section>
+
+{% if chart %}
+<section class="panel" id="history">
+  <h2>Value history <span class="small">{{ chart.first | eastern_date }} &ndash; {{ chart.last | eastern_date }}</span></h2>
+  <svg class="chart" viewBox="0 0 {{ chart.width }} {{ chart.height }}" role="img" aria-label="Value history chart">
+    {% for t in chart.ticks %}
+    <line x1="{{ chart.left }}" x2="{{ chart.right }}" y1="{{ t.y }}" y2="{{ t.y }}" class="grid"/>
+    <text x="{{ chart.left - 8 }}" y="{{ t.y + 4 }}" text-anchor="end" class="axis">{{ t.cents | money }}</text>
+    {% endfor %}
+    {% if chart.band %}<polygon points="{{ chart.band }}" class="band"/>{% endif %}
+    <polyline points="{{ chart.line }}" class="line"/>
+    {% for d in chart.dots %}<circle cx="{{ d.x }}" cy="{{ d.y }}" r="4" class="dot"/>{% endfor %}
+  </svg>
+  <p class="hint">White line: street value. Shaded band: low&ndash;high range across pressings. Prices refresh automatically about once a week.</p>
+</section>
+{% endif %}
+
+<section class="panel" id="review">
+  <h2>Your rating and review</h2>
+  <form method="post" action="/albums/{{ album.id }}/review">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <div class="review-row">
+      <label for="rating" class="sr-only">Rating</label>
+      <select id="rating" name="rating">
+        <option value="">Not rated</option>
+        {% for r in ratings | reverse %}
+        <option value="{{ r }}" {{ "selected" if album.rating == r }}>{{ r | stars }} &nbsp;{{ r }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <label for="review-text" class="sr-only">Review</label>
+    <textarea id="review-text" name="review" rows="4" maxlength="5000" placeholder="What do you think of this record?">{{ album.review }}</textarea>
+    <div class="actions"><button type="submit">Save review</button></div>
+  </form>
 </section>
 
 {% if release and release.images | length > 1 %}
@@ -122,21 +159,39 @@
 {% if pressings %}
 <section class="panel">
   <h2>Pressings checked</h2>
+  {% if album.pressing_locked %}
+  <form class="inline-note" method="post" action="/albums/{{ album.id }}/pressing">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <input type="hidden" name="mode" value="auto">
+    You picked this album's pressing. <button class="link" type="submit">Let myvinyl pick automatically</button>
+  </form>
+  {% else %}
+  <p class="hint">The best match was picked automatically. If it isn't your copy, click <strong>Mine</strong> on the right row.</p>
+  {% endif %}
   <div class="table-wrap">
   <table>
     <thead>
-      <tr><th>Year</th><th>Country</th><th>Label</th><th>Cat #</th><th>Format</th><th class="num">For sale</th><th class="num">Lowest</th></tr>
+      <tr><th>Year</th><th>Country</th><th>Label</th><th>Cat #</th><th>Format</th><th class="num">For sale</th><th class="num">Lowest</th><th></th></tr>
     </thead>
     <tbody>
       {% for p in pressings %}
       <tr class="{{ 'chosen' if p.release_id == album.discogs_release_id }}">
-        <td><a href="https://www.discogs.com/release/{{ p.release_id }}" target="_blank" rel="noopener noreferrer">{{ p.year or "?" }}</a>{% if p.release_id == album.discogs_release_id %} <span class="chip chip-red">best match</span>{% endif %}</td>
+        <td><a href="https://www.discogs.com/release/{{ p.release_id }}" target="_blank" rel="noopener noreferrer">{{ p.year or "?" }}</a>{% if p.release_id == album.discogs_release_id %} <span class="chip chip-red">{{ "yours" if album.pressing_locked else "best match" }}</span>{% endif %}</td>
         <td>{{ p.country }}</td>
         <td>{{ p.label }}</td>
         <td>{{ p.catno }}</td>
         <td class="wrap">{{ p.formats }}</td>
         <td class="num">{{ p.num_for_sale if p.num_for_sale is not none else "" }}</td>
         <td class="num">{{ p.price_cents | money }}</td>
+        <td>
+          {% if not (album.pressing_locked and p.release_id == album.discogs_release_id) %}
+          <form method="post" action="/albums/{{ album.id }}/pressing">
+            <input type="hidden" name="csrf" value="{{ csrf }}">
+            <input type="hidden" name="release_id" value="{{ p.release_id }}">
+            <button class="button-small" type="submit" {{ "disabled" if album.discogs_status == "pending" }}>Mine</button>
+          </form>
+          {% endif %}
+        </td>
       </tr>
       {% endfor %}
     </tbody>
@@ -145,13 +200,18 @@
 </section>
 {% endif %}
 
-{% if release and release.tracks %}
-<section class="panel">
-  <h2>Tracklist</h2>
+{% if tracks %}
+<section class="panel" id="tracks">
+  <h2>Tracklist <a class="small" href="/albums/{{ album.id }}/tracks">Rate tracks</a></h2>
   <table class="tracks">
     <tbody>
-      {% for t in release.tracks %}
-      <tr><td class="pos">{{ t.position }}</td><td class="wrap">{{ t.title }}</td><td class="num">{{ t.duration }}</td></tr>
+      {% for t in tracks %}
+      <tr>
+        <td class="pos">{{ t.position }}</td>
+        <td class="wrap">{{ t.title }}{% if t.note %}<span class="track-note">{{ t.note }}</span>{% endif %}</td>
+        <td class="stars-cell" aria-label="{{ 'Rated ' ~ t.rating ~ ' of 5' if t.rating is not none else 'Not rated' }}">{{ t.rating | stars }}</td>
+        <td class="num">{{ t.duration }}</td>
+      </tr>
       {% endfor %}
     </tbody>
   </table>

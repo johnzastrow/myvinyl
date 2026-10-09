@@ -59,7 +59,19 @@
   and you pick which one to display.
 - **Background lookups.** Saving is instant; the album page shows progress and refreshes
   itself until the lookup is done. Requests are throttled to stay within Discogs' rate limits.
+- **Pick your pressing.** Click **Mine** on the right row of the pressings table and the
+  value, details, and art follow your copy from then on.
+- **Add by barcode or catalog number** for an exact match; if several pressings share a
+  barcode, you choose one.
+- **Import your Discogs collection** (token required), including your Discogs ratings.
+- **Value history.** Prices are re-checked about once a week, and the album page charts
+  value and range over time.
 - **Optional token** for a faster API rate limit.
+
+### Ratings and reviews
+- Rate albums from half a star to 5 stars and write a review.
+- Rate each track and add a short note.
+- Sort the collection by rating.
 
 ### Look and feel
 - Buffalo Bills colors: royal blue pages (navy in dark mode), a navy header with a
@@ -143,6 +155,7 @@ is missing or malformed, rather than running with weak defaults.
 | `MYVINYL_PASSWORD_HASH` | Yes | Argon2id hash of your login password, from `myvinyl.credentials`. |
 | `MYVINYL_DISCOGS_TOKEN` | No | Discogs personal access token. Raises the API limit from 25 to 60 requests per minute. |
 | `MYVINYL_DB` | No | Path to the SQLite database file. Default: `myvinyl.db` in the current directory. |
+| `MYVINYL_REFRESH_DAYS` | No | Re-check prices of albums older than this many days. Default `7`; `0` turns automatic refresh off. |
 
 Keep these out of version control. `.gitignore` already excludes `.env` files and
 databases. A password manager or secret manager is a better home for them than a
@@ -221,6 +234,10 @@ When you save an album, myvinyl runs a lookup in the background:
 | Override the value | **Edit**, type a value, **Save**. Refreshes keep your value. |
 | Go back to the Discogs value | **Edit**, clear the value, **Save**, then **Refresh from Discogs**. |
 | Change the displayed cover | On the album page, click a different image under **Album art**. |
+| Fix the pressing | On the album page, click **Mine** on your row of **Pressings checked**. |
+| Add by barcode | Type the barcode or catalog number at the top of **Add album**; artist and title can stay blank. |
+| Import from Discogs | **Import** next to **Add album**, choose a default condition, **Import my collection**. |
+| Rate and review | **Your rating and review** on the album page; **Rate tracks** above the tracklist. |
 | Re-check prices | **Refresh from Discogs** on the album page. |
 | Export | **Export CSV** under the collection table. |
 | Delete | **Edit**, then **Delete this album**. |
@@ -293,13 +310,13 @@ Notes:
 
 ```powershell
 uv sync                                        # install, including dev tools
-uv run pytest                                  # 37 tests; Discogs is faked, no network needed
+uv run pytest                                  # 52 tests; Discogs is faked, no network needed
 uv run ruff check --fix . ; uv run ruff format .
 ```
 
-The Discogs lookup can be swapped out: `create_app(settings, enricher=...)` accepts any
-function `(artist, title, year) -> Enrichment | None`. The tests use this, so they never
-call the real API.
+Discogs access can be swapped out: `create_app(settings, service=..., inline_jobs=True)`
+takes any object with the `DiscogsService` methods and runs background jobs inline. The
+tests use this, so they never call the real API or start threads.
 
 ---
 
@@ -309,7 +326,9 @@ call the real API.
 myvinyl/
 ├── src/myvinyl/
 │   ├── main.py          # FastAPI app: routes, security headers, CSRF, background lookups
-│   ├── discogs.py       # Discogs client (throttle, retries), matching, pricing, parsing
+│   ├── discogs.py       # Discogs client (throttle, retries), matching, pricing, import
+│   ├── lookups.py       # Background lookup worker and weekly refresh scheduler
+│   ├── charts.py        # Server-side SVG geometry for the value-history chart
 │   ├── db.py            # SQLite schema, migrations, parameterized queries
 │   ├── albums.py        # Album fields and form validation
 │   ├── auth.py          # Argon2id verification and login rate limiter
@@ -329,6 +348,12 @@ myvinyl/
 ## Changelog
 
 The full history is in [CHANGELOG.md](CHANGELOG.md).
+
+### 0.5.0 - 2026-10-09
+- **Added:** pick your pressing; add by barcode or catalog number; Discogs collection
+  import; value history chart with weekly automatic refresh; album and track ratings and
+  reviews.
+- **Changed:** lookups share one background worker.
 
 ### 0.4.0 - 2026-10-09
 - **Added:** value range across up to 10 pressings (low, median, high, and per-pressing

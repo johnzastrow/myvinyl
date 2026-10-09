@@ -1,3 +1,5 @@
+import dataclasses
+import html
 import re
 
 import pytest
@@ -52,8 +54,10 @@ def pressing(release_id, year, price):
     )
 
 
-class FakeEnricher:
+class FakeService:
     """Stands in for the Discogs API so tests never touch the network."""
+
+    has_token = True
 
     def __init__(self):
         self.result = Enrichment(
@@ -72,17 +76,30 @@ class FakeEnricher:
         )
         self.calls = []
         self.error = None
+        self.identifier_matches = []
+        self.collection_items = []
 
-    def __call__(self, artist, title, year):
+    def enrich(self, artist, title, year, release_id=None):
         self.calls.append((artist, title, year))
+        self.pinned = release_id
         if self.error:
             raise self.error
+        if self.result and release_id and release_id != self.result.release_id:
+            price = {p.release_id: p.price_cents for p in self.result.pressings}.get(release_id)
+            return dataclasses.replace(self.result, release_id=release_id, value_cents=price)
         return self.result
+
+    def find_by_identifier(self, identifier):
+        self.identifier = identifier
+        return self.identifier_matches
+
+    def collection(self):
+        yield from self.collection_items
 
 
 @pytest.fixture
 def lookup():
-    return FakeEnricher()
+    return FakeService()
 
 
 @pytest.fixture
@@ -91,7 +108,7 @@ def client(tmp_path, lookup):
         secret_key="x" * 48, password_hash=PASSWORD_HASH, db_path=tmp_path / "test.db"
     )
     # https base URL so the Secure session cookie is sent back.
-    app = create_app(settings, enricher=lookup)
+    app = create_app(settings, service=lookup, inline_jobs=True)
     with TestClient(app, base_url="https://testserver") as c:
         yield c
 
@@ -424,3 +441,195 @@ def test_favicon_and_logo_served(client):
     assert client.get("/favicon.ico").status_code == 200
     r = client.get("/static/logo.svg")
     assert r.status_code == 200 and "<svg" in r.text
+
+
+# --- Picking the pressing ------------------------------------------------------------------
+
+
+def album_id_of(link):
+    return int(link.rsplit("/", 1)[1])
+
+
+def test_pick_my_pressing_and_back_to_auto(authed, lookup, tmp_path):
+    add(authed, artist="New Order", title="Substance")
+    link = first_album_link(authed)
+    token = csrf_from(authed, link)
+    page = authed.get(link).text
+    assert "best match" in page and ">Mine<" in page
+
+    authed.post(link + "/pressing", data={"csrf": token, "release_id": "28848151"})
+    assert lookup.pinned == 28848151
+    album = db.get_album(tmp_path / "test.db", album_id_of(link))
+    assert album["pressing_locked"] == 1 and album["discogs_release_id"] == 28848151
+    assert album["value_cents"] == 7228  # value follows your pressing
+    page = authed.get(link).text
+    assert "your pressing" in page and "Let myvinyl pick automatically" in page
+
+    # Refreshes keep your pick.
+    authed.post(link + "/lookup", data={"csrf": token})
+    assert lookup.pinned == 28848151
+
+    authed.post(link + "/pressing", data={"csrf": token, "mode": "auto"})
+    assert lookup.pinned is None
+    album = db.get_album(tmp_path / "test.db", album_id_of(link))
+    assert album["pressing_locked"] == 0 and album["discogs_release_id"] == 28855534
+
+
+def test_pick_pressing_rejects_unknown_release(authed):
+    add(authed)
+    link = first_album_link(authed)
+    token = csrf_from(authed, link)
+    for bad in ("123", "abc", "-5", ""):
+        r = authed.post(link + "/pressing", data={"csrf": token, "release_id": bad})
+        assert r.status_code == 400
+
+
+# --- Barcode / catalog number --------------------------------------------------------------
+
+
+MATCH = {
+    "release_id": 28855534,
+    "artist": "New Order",
+    "title": "Substance",
+    "year": 2023,
+    "label": "Factory",
+    "format": "2xLP",
+    "country": "Worldwide",
+    "catno": "Fact 200",
+    "formats": "Vinyl, LP",
+}
+
+
+def test_barcode_single_match_fills_blanks(authed, lookup, tmp_path):
+    lookup.identifier_matches = [MATCH]
+    r = add(authed, artist="", title="", identifier="0 190295 928889", condition="NM")
+    assert r.status_code == 303
+    assert lookup.identifier == "0 190295 928889"
+    album = db.get_album(tmp_path / "test.db", album_id_of(r.headers["location"]))
+    assert (album["artist"], album["title"], album["format"]) == ("New Order", "Substance", "2xLP")
+    assert album["condition"] == "NM" and album["pressing_locked"] == 1
+    assert album["identifier"] == "0 190295 928889"
+    assert lookup.pinned == 28855534
+
+
+def test_barcode_several_matches_lets_you_choose(authed, lookup, tmp_path):
+    other = {**MATCH, "release_id": 28848151, "formats": "Vinyl, LP, <b>Red</b>"}
+    lookup.identifier_matches = [MATCH, other]
+    r = add(authed, artist="", title="", identifier="0190295928889", notes="gift")
+    assert r.status_code == 200 and "Which pressing is yours?" in r.text
+    assert "&lt;b&gt;Red" in r.text  # Discogs text is escaped
+    # Submit the second option's form as the browser would.
+    form = re.findall(r'<form method="post" action="/albums">(.*?)</form>', r.text, re.S)[1]
+    data = dict(re.findall(r'name="([^"]+)" value="([^"]*)"', form))
+    data = {k: html.unescape(v) for k, v in data.items()}
+    r = authed.post("/albums", data=data, follow_redirects=False)
+    album = db.get_album(tmp_path / "test.db", album_id_of(r.headers["location"]))
+    assert album["discogs_release_id"] == 28848151 and album["notes"] == "gift"
+
+
+def test_barcode_errors(authed, lookup):
+    lookup.identifier_matches = []
+    r = add(authed, identifier="123456")
+    assert r.status_code == 422 and "No vinyl release on Discogs" in r.text
+    r = add(authed, identifier="<script>")
+    assert r.status_code == 422 and "letters, digits" in r.text
+
+
+# --- Discogs import ------------------------------------------------------------------------
+
+
+def test_import_collection_skips_duplicates(authed, lookup, tmp_path):
+    lookup.collection_items = [
+        {
+            "release_id": 1,
+            "artist": "Joy Division",
+            "title": "Closer",
+            "year": 1980,
+            "label": "Factory",
+            "format": "LP",
+            "rating": 5.0,
+        },
+        {
+            "release_id": 2,
+            "artist": "Bjork",
+            "title": "Post",
+            "year": 1995,
+            "label": "One Little Indian",
+            "format": "LP",
+            "rating": None,
+        },
+    ]
+    token = csrf_from(authed, "/import")
+    authed.post("/import", data={"csrf": token, "condition": "NM"})
+    assert "2 added, 0 already here" in authed.get("/import").text
+    authed.post("/import", data={"csrf": token, "condition": "NM"})
+    assert "0 added, 2 already here" in authed.get("/import").text
+
+    page = authed.get("/").text
+    assert "Closer" in page and "Post" in page and "★★★★★" in page
+    albums = db.list_albums(tmp_path / "test.db")
+    assert all(a["pressing_locked"] == 1 and a["condition"] == "NM" for a in albums)
+
+
+def test_import_rejects_bad_condition(authed):
+    token = csrf_from(authed, "/import")
+    assert authed.post("/import", data={"csrf": token, "condition": "X"}).status_code == 400
+
+
+# --- Value history -------------------------------------------------------------------------
+
+
+def test_history_chart_and_scheduled_refresh(authed, lookup, tmp_path):
+    path = tmp_path / "test.db"
+    add(authed)
+    link = first_album_link(authed)
+    album_id = album_id_of(link)
+    assert "Value history" not in authed.get(link).text  # one point is not a chart
+
+    # Age the last check so the scheduler picks it up.
+    with db.connect(path) as conn:
+        conn.execute("UPDATE albums SET discogs_checked_at = datetime('now', '-8 days')")
+        conn.execute("UPDATE value_history SET checked_at = datetime('now', '-8 days')")
+    lookup.result = dataclasses.replace(lookup.result, value_cents=3000, high_cents=9000)
+    assert authed.app.state.refresh_due() == 1
+    assert authed.app.state.refresh_due() == 0  # fresh again
+
+    page = authed.get(link).text
+    assert "Value history" in page and "<polyline" in page and "<polygon" in page
+    assert len(db.get_history(path, album_id)) == 2
+
+
+# --- Ratings and reviews -------------------------------------------------------------------
+
+
+def test_album_rating_and_review(authed, tmp_path):
+    add(authed)
+    link = first_album_link(authed)
+    token = csrf_from(authed, link)
+    authed.post(link + "/review", data={"csrf": token, "rating": "4.5", "review": "<i>Great</i>"})
+    page = authed.get(link).text
+    assert "★★★★½" in page and "&lt;i&gt;Great&lt;/i&gt;" in page
+    assert "★★★★½" in authed.get("/?sort=rating&dir=desc").text
+
+    for bad in ("6", "4.2", "0", "nan"):
+        r = authed.post(link + "/review", data={"csrf": token, "rating": bad, "review": ""})
+        assert r.status_code == 400
+    authed.post(link + "/review", data={"csrf": token, "rating": "", "review": ""})
+    assert db.get_album(tmp_path / "test.db", album_id_of(link))["rating"] is None
+
+
+def test_track_ratings(authed, tmp_path):
+    add(authed, artist="New Order", title="Substance")
+    link = first_album_link(authed)
+    form = authed.get(link + "/tracks").text
+    assert "Ceremony" in form and 'name="rating_0"' in form
+    token = csrf_from(authed, link + "/tracks")
+    authed.post(link + "/tracks", data={"csrf": token, "rating_0": "5", "note_0": "Opener"})
+    page = authed.get(link).text
+    assert "★★★★★" in page and "Opener" in page
+
+    r = authed.post(link + "/tracks", data={"csrf": token, "rating_0": "9"})
+    assert r.status_code == 400
+    # Forged extra fields are ignored: tracks come from the stored tracklist.
+    authed.post(link + "/tracks", data={"csrf": token, "rating_7": "5", "position_0": "Z9"})
+    assert db.get_track_ratings(tmp_path / "test.db", album_id_of(link)) == {}

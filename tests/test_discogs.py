@@ -182,3 +182,112 @@ def test_client_sends_token_header(monkeypatch):
 
     discogs.DiscogsClient().get("/releases/1")
     assert seen["auth"] is None
+
+
+def test_enrich_with_pinned_release_not_in_search():
+    client = FakeClient(
+        {
+            "/database/search": {"results": [result(1, 2000)]},
+            "/marketplace/stats/77": stats(99),
+            "/marketplace/stats/1": stats(10),
+            "/releases/77": {
+                "title": "Substance",
+                "year": 2016,
+                "country": "US",
+                "artists": [{"name": "New Order (2)"}],
+                "labels": [{"name": "Factory", "catno": "F 1"}],
+                "formats": [{"name": "Vinyl", "descriptions": ["LP"]}],
+            },
+        }
+    )
+    e = discogs.enrich(client, "New Order", "Substance", None, release_id=77)
+    assert e.release_id == 77 and e.value_cents == 9900
+    chosen = e.pressings[0]
+    assert (chosen.year, chosen.country, chosen.label, chosen.catno) == (
+        2016,
+        "US",
+        "Factory",
+        "F 1",
+    )
+    assert chosen.title == "New Order - Substance"
+    assert (e.low_cents, e.high_cents) == (1000, 9900)
+
+
+def test_find_by_identifier_barcode_then_catno():
+    client = FakeClient(
+        {
+            "/database/search": [
+                {"results": []},  # barcode: nothing
+                {
+                    "results": [
+                        {
+                            "id": 5,
+                            "title": "Jail (17) - Broken Glass",
+                            "year": "2024",
+                            "format": ["Vinyl", '10"', "EP"],
+                            "label": ["Dure"],
+                            "catno": "none",
+                            "country": "Canada",
+                        }
+                    ]
+                },
+            ]
+        }
+    )
+    found = discogs.find_by_identifier(client, "0 12345-678")
+    assert client.calls[0][1]["barcode"] == "012345678"
+    assert client.calls[1][1]["catno"] == "0 12345-678"
+    assert found[0]["artist"] == "Jail" and found[0]["title"] == "Broken Glass"
+    assert found[0]["format"] == '10"' and found[0]["year"] == 2024
+
+
+def test_map_format():
+    assert discogs.map_format(["Vinyl", "LP"], 1) == "LP"
+    assert discogs.map_format(["Vinyl", "LP"], 2) == "2xLP"
+    assert discogs.map_format(["Vinyl", '7"', "Single"], 1) == '7"'
+    assert discogs.map_format(["Vinyl", '12"', "Maxi-Single"], 1) == '12" single'
+    assert discogs.map_format(["Box Set", "Vinyl", "LP"], 5) == "Box set"
+    assert discogs.map_format(["Vinyl", "EP"], 1) == "EP"
+
+
+def test_collection_pages_and_filters_non_vinyl():
+    page1 = {
+        "pagination": {"pages": 2},
+        "releases": [
+            {
+                "rating": 4,
+                "basic_information": {
+                    "id": 1,
+                    "title": "Closer",
+                    "year": 1980,
+                    "artists": [{"name": "Joy Division"}],
+                    "labels": [{"name": "Factory"}],
+                    "formats": [{"name": "Vinyl", "qty": "1", "descriptions": ["LP"]}],
+                },
+            },
+            {
+                "basic_information": {
+                    "id": 2,
+                    "title": "A CD",
+                    "artists": [{"name": "X"}],
+                    "formats": [{"name": "CD"}],
+                }
+            },
+        ],
+    }
+    page2 = {"pagination": {"pages": 2}, "releases": ["junk", {"basic_information": "junk"}]}
+    client = FakeClient(
+        {
+            "/oauth/identity": {"username": "vinylfan"},
+            "/users/vinylfan/collection/folders/0/releases": [page1, page2],
+        }
+    )
+    items = list(discogs.collection(client, discogs.identity(client)))
+    assert [i["release_id"] for i in items] == [1]
+    assert items[0]["rating"] == 4.0 and items[0]["format"] == "LP"
+
+
+def test_identity_rejects_odd_usernames():
+    client = FakeClient({"/oauth/identity": {"username": "../../admin"}})
+    with pytest.raises(ValueError):
+        discogs.identity(client)

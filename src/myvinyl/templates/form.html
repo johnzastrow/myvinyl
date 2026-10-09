@@ -18,8 +18,14 @@
 <form class="narrow panel" method="post" action="{{ '/albums/%d' % album_id if album_id else '/albums' }}">
   <h1>{{ "Edit album" if album_id else "Add album" }}</h1>
   <input type="hidden" name="csrf" value="{{ csrf }}">
-  {{ field("artist", "Artist", attrs='required maxlength="200"') }}
-  {{ field("title", "Title", attrs='required maxlength="200"') }}
+  {% if not album_id %}
+  <div class="callout">
+    {{ field("identifier", "Barcode or catalog number (optional)", attrs='maxlength="50" autocomplete="off" placeholder="e.g. 0190295928889 or Fact 200"') }}
+    <p class="hint">Finds your exact pressing on Discogs and fills in artist, title, year, label, and format. If several pressings match, you choose one.</p>
+  </div>
+  {% endif %}
+  {{ field("artist", "Artist", attrs='maxlength="200"') }}
+  {{ field("title", "Title", attrs='maxlength="200"') }}
   <div class="row">
     <div>{{ field("year", "Year", "number", 'min="1900" max="2100"') }}</div>
     <div>{{ field("value", "Street value ($)", "text", 'inputmode="decimal" placeholder="0.00"') }}</div>

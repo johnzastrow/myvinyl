@@ -27,6 +27,10 @@ CREATE TABLE IF NOT EXISTS albums (
     discogs_status TEXT,        -- 'pending', 'done', 'none' (no match), 'error'
     discogs_checked_at TEXT,
     cover_uri TEXT,             -- album art you picked from the Discogs images
+    pressing_locked INTEGER NOT NULL DEFAULT 0,  -- 1 = you picked the pressing
+    identifier TEXT NOT NULL DEFAULT '',         -- barcode or catalog # you entered
+    rating REAL,                -- your rating, 0.5 to 5 in half steps
+    review TEXT NOT NULL DEFAULT '',
     created_at  TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at  TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
@@ -54,6 +58,29 @@ CREATE TABLE IF NOT EXISTS discogs_pressings (
     num_for_sale INTEGER,
     PRIMARY KEY (album_id, release_id)
 );
+
+-- One row per completed Discogs lookup, for the value-history chart.
+CREATE TABLE IF NOT EXISTS value_history (
+    id           INTEGER PRIMARY KEY,
+    album_id     INTEGER NOT NULL REFERENCES albums(id) ON DELETE CASCADE,
+    checked_at   TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    release_id   INTEGER,
+    value_cents  INTEGER,
+    low_cents    INTEGER,
+    median_cents INTEGER,
+    high_cents   INTEGER
+);
+CREATE INDEX IF NOT EXISTS ix_value_history ON value_history (album_id, checked_at);
+
+-- Your rating and note for each track (positions come from the Discogs tracklist).
+CREATE TABLE IF NOT EXISTS track_ratings (
+    album_id INTEGER NOT NULL REFERENCES albums(id) ON DELETE CASCADE,
+    position TEXT NOT NULL,
+    title    TEXT NOT NULL,
+    rating   REAL,
+    note     TEXT NOT NULL DEFAULT '',
+    PRIMARY KEY (album_id, position)
+);
 """
 
 # Columns added to `albums` after 0.1.0; existing databases are upgraded in place.
@@ -66,6 +93,10 @@ MIGRATIONS = {
     "discogs_status": "ALTER TABLE albums ADD COLUMN discogs_status TEXT",
     "discogs_checked_at": "ALTER TABLE albums ADD COLUMN discogs_checked_at TEXT",
     "cover_uri": "ALTER TABLE albums ADD COLUMN cover_uri TEXT",
+    "pressing_locked": "ALTER TABLE albums ADD COLUMN pressing_locked INTEGER NOT NULL DEFAULT 0",
+    "identifier": "ALTER TABLE albums ADD COLUMN identifier TEXT NOT NULL DEFAULT ''",
+    "rating": "ALTER TABLE albums ADD COLUMN rating REAL",
+    "review": "ALTER TABLE albums ADD COLUMN review TEXT NOT NULL DEFAULT ''",
 }
 
 _condition_rank = " ".join(f"WHEN '{c}' THEN {i}" for i, c in enumerate(CONDITIONS))
@@ -80,6 +111,7 @@ SORTS = {
     "format": "format",
     "condition": f"CASE condition {_condition_rank} END",
     "value": "value_cents",
+    "rating": "rating",
 }
 
 COLUMNS = ("artist", "title", "year", "label", "format", "condition", "notes", "value_cents")
@@ -148,15 +180,39 @@ def get_album(path: Path, album_id: int):
         return conn.execute("SELECT * FROM albums WHERE id = ?", (album_id,)).fetchone()
 
 
-def create_album(path: Path, data: dict) -> int:
+def create_album(
+    path: Path,
+    data: dict,
+    release_id: int | None = None,
+    identifier: str = "",
+    rating: float | None = None,
+) -> int:
+    """Insert an album. A `release_id` pins the pressing (barcode match or import)."""
     source = None if data["value_cents"] is None else "manual"
     with connect(path) as conn:
         cur = conn.execute(
             "INSERT INTO albums (artist, title, year, label, format, condition, notes,"
-            " value_cents, value_source) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            [*(data[c] for c in COLUMNS), source],
+            " value_cents, value_source, discogs_release_id, pressing_locked, identifier,"
+            " rating) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            [
+                *(data[c] for c in COLUMNS),
+                source,
+                release_id,
+                1 if release_id else 0,
+                identifier,
+                rating,
+            ],
         )
         return cur.lastrowid
+
+
+def album_for_release(path: Path, release_id: int):
+    """An album already pinned to this Discogs release, if any (import de-duplication)."""
+    with connect(path) as conn:
+        return conn.execute(
+            "SELECT * FROM albums WHERE discogs_release_id = ? AND pressing_locked = 1",
+            (release_id,),
+        ).fetchone()
 
 
 def update_album(path: Path, album_id: int, data: dict, value_source: str | None) -> bool:
@@ -173,6 +229,45 @@ def update_album(path: Path, album_id: int, data: dict, value_source: str | None
 def set_cover(path: Path, album_id: int, uri: str) -> None:
     with connect(path) as conn:
         conn.execute("UPDATE albums SET cover_uri = ? WHERE id = ?", (uri, album_id))
+
+
+def set_pressing(path: Path, album_id: int, release_id: int | None) -> None:
+    """Pin the album to a pressing you picked, or (None) go back to automatic matching."""
+    with connect(path) as conn:
+        if release_id is None:
+            conn.execute("UPDATE albums SET pressing_locked = 0 WHERE id = ?", (album_id,))
+        else:
+            conn.execute(
+                "UPDATE albums SET discogs_release_id = ?, pressing_locked = 1 WHERE id = ?",
+                (release_id, album_id),
+            )
+
+
+def set_review(path: Path, album_id: int, rating: float | None, review: str) -> None:
+    with connect(path) as conn:
+        conn.execute(
+            "UPDATE albums SET rating = ?, review = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+            (rating, review, album_id),
+        )
+
+
+def get_track_ratings(path: Path, album_id: int) -> dict[str, sqlite3.Row]:
+    with connect(path) as conn:
+        rows = conn.execute(
+            "SELECT * FROM track_ratings WHERE album_id = ?", (album_id,)
+        ).fetchall()
+    return {row["position"]: row for row in rows}
+
+
+def save_track_ratings(path: Path, album_id: int, tracks: list[tuple]) -> None:
+    """Replace all track ratings: tracks = [(position, title, rating, note), ...]."""
+    with connect(path) as conn:
+        conn.execute("DELETE FROM track_ratings WHERE album_id = ?", (album_id,))
+        conn.executemany(
+            "INSERT INTO track_ratings (album_id, position, title, rating, note)"
+            " VALUES (?, ?, ?, ?, ?)",
+            [(album_id, *t) for t in tracks if t[2] is not None or t[3]],
+        )
 
 
 def delete_album(path: Path, album_id: int) -> bool:
@@ -261,6 +356,12 @@ def save_enrichment(path: Path, album_id: int, e) -> None:
             "INSERT OR REPLACE INTO discogs_releases (album_id, release_id, data) VALUES (?, ?, ?)",
             (album_id, e.release_id, json.dumps(release)),
         )
+        conn.execute(
+            "INSERT INTO value_history (album_id, release_id, value_cents, low_cents,"
+            " median_cents, high_cents)"
+            " SELECT id, ?, value_cents, ?, ?, ? FROM albums WHERE id = ?",
+            (e.release_id, e.low_cents, e.median_cents, e.high_cents, album_id),
+        )
 
 
 def get_discogs(path: Path, album_id: int) -> tuple[dict | None, list]:
@@ -273,3 +374,23 @@ def get_discogs(path: Path, album_id: int) -> tuple[dict | None, list]:
             "SELECT * FROM discogs_pressings WHERE album_id = ? ORDER BY rank", (album_id,)
         ).fetchall()
     return (json.loads(row["data"]) if row else None), pressings
+
+
+def get_history(path: Path, album_id: int) -> list[sqlite3.Row]:
+    with connect(path) as conn:
+        return conn.execute(
+            "SELECT * FROM value_history WHERE album_id = ? ORDER BY checked_at, id",
+            (album_id,),
+        ).fetchall()
+
+
+def due_for_refresh(path: Path, days: int, limit: int) -> list[int]:
+    """Albums whose Discogs data is older than `days` (oldest first)."""
+    with connect(path) as conn:
+        rows = conn.execute(
+            "SELECT id FROM albums WHERE COALESCE(discogs_status, '') != 'pending'"
+            " AND (discogs_checked_at IS NULL OR discogs_checked_at < datetime('now', ?))"
+            " ORDER BY discogs_checked_at IS NOT NULL, discogs_checked_at LIMIT ?",
+            (f"-{int(days)} days", int(limit)),
+        ).fetchall()
+    return [row["id"] for row in rows]

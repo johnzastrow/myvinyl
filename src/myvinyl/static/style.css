@@ -298,6 +298,38 @@ button.art-selected { border-color: var(--red); box-shadow: 0 0 0 2px var(--whit
   font-weight: 700;
 }
 
+/* --- Ratings, picks, history ------------------------------------------------------------ */
+
+.stars-big { margin: 0 0 8px; font-size: 1.4rem; letter-spacing: 0.08em; color: var(--white); }
+.stars-cell { white-space: nowrap; letter-spacing: 0.05em; }
+.track-note { display: block; color: var(--muted); font-size: 0.85rem; }
+.review-row { max-width: 260px; margin-bottom: 10px; }
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+}
+.button-small {
+  padding: 4px 10px;
+  font-size: 0.75rem;
+  box-shadow: none;
+}
+.inline-note { margin: 0 0 12px; color: var(--muted); }
+.callout {
+  margin: 8px 0 4px;
+  padding: 4px 16px 14px;
+  border: 2px dashed var(--line);
+  border-radius: 10px;
+}
+.track-form select { min-width: 150px; }
+.track-form input { min-width: 220px; }
+
+.chart { display: block; width: 100%; height: auto; }
+.chart .grid { stroke: var(--line); stroke-width: 1; }
+.chart .axis { fill: var(--muted); font-size: 12px; }
+.chart .band { fill: var(--red); fill-opacity: 0.35; }
+.chart .line { fill: none; stroke: var(--white); stroke-width: 3; stroke-linejoin: round; }
+.chart .dot { fill: var(--white); stroke: var(--red); stroke-width: 2; }
+
 @media (max-width: 560px) {
   .row { grid-template-columns: 1fr; }
   .album-title h1 { font-size: 1.7rem; }

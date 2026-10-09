@@ -18,7 +18,9 @@
     <input type="search" name="q" value="{{ q }}" placeholder="Search artist, title, label" maxlength="200" aria-label="Search">
   </form>
   <a class="button" href="/albums/new">Add album</a>
+  <a class="button-outline" href="/import">Import</a>
 </div>
+{% if queued %}<p class="hint">{{ queued }} album{{ "" if queued == 1 else "s" }} waiting for Discogs lookups.</p>{% endif %}
 
 {% if albums %}
 <div class="table-wrap">
@@ -31,6 +33,7 @@
       <th>{{ sort_link("label", "Label") }}</th>
       <th>{{ sort_link("format", "Format") }}</th>
       <th>{{ sort_link("condition", "Cond.") }}</th>
+      <th>{{ sort_link("rating", "Rating") }}</th>
       <th class="num">{{ sort_link("value", "Value") }}</th>
     </tr>
   </thead>
@@ -43,6 +46,7 @@
       <td>{{ a.label }}</td>
       <td>{{ a.format }}</td>
       <td><span class="chip chip-red">{{ a.condition }}</span></td>
+      <td class="stars-cell">{{ a.rating | stars }}</td>
       <td class="num">
         {% if a.discogs_status == "pending" %}<span class="muted">looking up&hellip;</span>
         {% else %}{{ a.value_cents | money }}
