@@ -106,7 +106,7 @@ A dark-mode album page is in [docs/screenshots/album-dark.png](docs/screenshots/
 Requirements: Python 3.12 or newer and [uv](https://docs.astral.sh/uv/).
 
 ```powershell
-git clone <your-repo-url> myvinyl
+git clone https://github.com/johnzastrow/myvinyl.git
 cd myvinyl
 uv sync
 ```

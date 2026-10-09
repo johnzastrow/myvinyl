@@ -5,12 +5,14 @@ before work starts.
 
 ## Next up
 
-### Multi-user (decision)
+### Multi-user
 Do this before the per-user features below, since every table needs an owner.
-- [ ] Decide: separate private collections per user, or one shared collection with
-      several editors?
-- [ ] Decide: how accounts are created (admin invites, open sign-up, admin creates them).
-- [ ] Decide: roles (admin / member / read-only viewer).
+
+Decided 2026-10-09:
+- Each user has a private collection. **Admins can do anything to any collection.**
+- Accounts are created by **admin invite links** (one-time, expire after 7 days); the
+  invitee sets their own password. No open sign-up.
+
 - [ ] Users table, per-user Argon2id passwords, per-user login rate limits.
 - [ ] Scope albums, ratings, notes, wishlist, and history to their owner; authorization
       checks on every route.
@@ -39,12 +41,12 @@ Do this before the per-user features below, since every table needs an owner.
       serve them from myvinyl.
 - [ ] Automatic backups: daily SQLite backup with the online backup API, keep the last N.
 
-### Deployment (decision)
+### Deployment
 - [ ] Dockerfile (non-root user, `/data` volume for database, covers, backups).
 - [ ] docker-compose.yml.
 - [ ] Caddy site `myvinyl.fluidgrid.site` on the server that already serves
-      `recipe.fluidgrid.site`. Decide: does Caddy run on the host or in Docker? That sets
-      the upstream address and the trusted-proxy setting.
+      `recipe.fluidgrid.site`. Caddy runs **on the host** (decided 2026-10-09), so the
+      container publishes `127.0.0.1:8000` only and Caddy proxies to it.
 - [ ] DNS record for `myvinyl.fluidgrid.site`.
 
 ## Ideas, not scheduled
@@ -56,6 +58,7 @@ Do this before the per-user features below, since every table needs an owner.
 - Pagination for large collections.
 
 ## Done
+- Repository published: https://github.com/johnzastrow/myvinyl (public).
 - 0.5.0: pick your pressing, barcode/catalog-number add, Discogs import, value history
   with weekly refresh, album and track ratings and reviews.
 - 0.4.0: value range across pressings, Discogs metadata, album art chooser, optional
