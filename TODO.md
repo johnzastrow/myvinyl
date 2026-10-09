@@ -4,14 +4,18 @@ Backlog for myvinyl. Items marked **(decision)** need an answer before work star
 
 ## Next up
 
-### Deployment (needs you, on the server)
-- [ ] DNS record for `myvinyl.fluidgrid.site` (CNAME to `recipe.fluidgrid.site` or an A
-      record).
-- [ ] Follow `deploy/DEPLOY.md`: clone, create `.env`, `docker compose up -d --build`,
-      add the Caddy site block, reload Caddy.
-- [ ] Build and test the Docker image (Docker wasn't available on the development
-      machine, so the image hasn't been built yet).
-- [ ] Set up off-server copies of `/data/backups`.
+### Deployment
+Live since 2026-10-09 at https://myvinyl.fluidgrid.site (server `recipe.fluidgrid.site`,
+stack in `~/myvinyldocker`, container `myvinyl` on `127.0.0.1:8094`).
+- [x] DNS (already resolved via the existing fluidgrid.site records).
+- [x] Image built and running (healthy); HTTPS certificate issued by Caddy.
+- [x] Caddy site block applied live through the admin API.
+- [ ] **Persist the Caddy config** (needs sudo): copy
+      `~/myvinyldocker/caddy/Caddyfile.proposed` to `/etc/caddy/Caddyfile`. Until then a
+      Caddy restart or reload from the file drops the myvinyl site.
+- [ ] Admin: log in, change the generated password, delete `~/myvinyldocker/ADMIN_PASSWORD.txt`.
+- [ ] Optional: set `MYVINYL_DISCOGS_TOKEN` in `~/myvinyldocker/.env`, then `docker compose up -d`.
+- [ ] Copy `/data/backups` off the server (cron + rsync or similar).
 - [ ] Optional: pin the Docker base images by digest.
 
 ### Security follow-ups (see SECURITY.md)
