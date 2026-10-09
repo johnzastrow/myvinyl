@@ -46,8 +46,8 @@ docker compose ps            # STATUS should become "healthy"
 curl -s http://127.0.0.1:8085/healthz   # prints: ok
 ```
 
-If port 8085 is already used on the server, change `127.0.0.1:8085` in `compose.yaml` and
-`reverse_proxy 127.0.0.1:8085` in the Caddy block to the same free port.
+If port 8085 is already used on the server, set `MYVINYL_HOST_PORT` in `.env` to a free
+port and use the same port in the Caddy block's `reverse_proxy` line.
 
 ## 5. Caddy
 

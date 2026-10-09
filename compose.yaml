@@ -21,7 +21,8 @@ services:
       # Caddy's headers and every login attempt would share one rate-limit bucket.
       FORWARDED_ALLOW_IPS: "*"
     ports:
-      - "127.0.0.1:8085:8000"
+      # Host port is configurable in .env (MYVINYL_HOST_PORT); always bound to 127.0.0.1.
+      - "127.0.0.1:${MYVINYL_HOST_PORT:-8085}:8000"
     volumes:
       - myvinyl-data:/data       # database, saved covers, backups
     read_only: true              # only /data and /tmp are writable
