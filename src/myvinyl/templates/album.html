@@ -1,0 +1,178 @@
+{% extends "base.html" %}
+{% block title %}{{ album.artist }} - {{ album.title }} - myvinyl{% endblock %}
+{% block head %}
+{% if album.discogs_status == "pending" %}<meta http-equiv="refresh" content="5">{% endif %}
+{% endblock %}
+{% block content %}
+<section class="album-head">
+  {% if cover %}
+  <img class="cover" src="{{ cover }}" alt="Cover of {{ album.title }}" referrerpolicy="no-referrer">
+  {% else %}
+  <div class="cover cover-blank" aria-hidden="true"><span></span></div>
+  {% endif %}
+  <div class="album-title">
+    <p class="eyebrow">{{ album.artist }}</p>
+    <h1>{{ album.title }}</h1>
+    <p class="chips">
+      {% if album.year %}<span class="chip">{{ album.year }}</span>{% endif %}
+      <span class="chip">{{ album.format }}</span>
+      <span class="chip chip-red">{{ album.condition }}</span>
+      {% if album.label %}<span class="chip">{{ album.label }}</span>{% endif %}
+    </p>
+    <div class="actions">
+      <a class="button" href="/albums/{{ album.id }}/edit">Edit</a>
+      <form method="post" action="/albums/{{ album.id }}/lookup">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <button class="button-outline" type="submit" {{ "disabled" if album.discogs_status == "pending" }}>Refresh from Discogs</button>
+      </form>
+    </div>
+  </div>
+</section>
+
+{% if album.discogs_status == "pending" %}
+<p class="notice">Looking up this album on Discogs. This page refreshes automatically; without a token a full lookup takes about 30 seconds.</p>
+{% elif album.discogs_status == "none" %}
+<p class="notice">No matching vinyl release found on Discogs. Check the artist and title spelling, then refresh.</p>
+{% elif album.discogs_status == "error" %}
+<p class="notice">The Discogs lookup did not finish (network error, rate limit, or restart). Try Refresh from Discogs.</p>
+{% endif %}
+
+<section class="cards">
+  <div class="card card-value">
+    <h2>Street value</h2>
+    <p class="big">{{ album.value_cents | money or "Not set" }}</p>
+    <p class="hint">
+      {% if album.value_source == "manual" %}Entered by you.
+      {% elif album.value_source == "discogs" %}Lowest Discogs asking price for the best-matching pressing
+        (<a href="https://www.discogs.com/release/{{ album.discogs_release_id }}" target="_blank" rel="noopener noreferrer">release {{ album.discogs_release_id }}</a>).
+      {% else %}No value yet.{% endif %}
+    </p>
+  </div>
+  <div class="card">
+    <h2>Range across pressings</h2>
+    {% set priced = pressings | selectattr("price_cents", "ne", none) | list %}
+    {% if priced %}
+    <p class="big">{{ album.value_low_cents | money }} &ndash; {{ album.value_high_cents | money }}</p>
+    <p class="hint">Median {{ album.value_median_cents | money }} &middot; {{ priced | length }} of {{ pressings | length }} pressings for sale</p>
+    {% else %}
+    <p class="big">&ndash;</p>
+    <p class="hint">{{ "No checked pressings are for sale right now." if pressings else "Not looked up yet." }}</p>
+    {% endif %}
+  </div>
+  {% if release %}
+  <div class="card">
+    <h2>Community</h2>
+    <p class="big">{{ release.have if release.have is not none else "?" }} <small>have</small> &middot; {{ release.want if release.want is not none else "?" }} <small>want</small></p>
+    <p class="hint">{% if release.rating %}Rated {{ "%.2f" | format(release.rating) }} / 5 by {{ release.rating_count }}{% else %}No ratings{% endif %}</p>
+  </div>
+  {% endif %}
+</section>
+
+{% if release and release.images | length > 1 %}
+<section class="panel" id="art">
+  <h2>Album art <span class="small">{{ release.images | length }} images from Discogs &middot; choose the one to display</span></h2>
+  <div class="art-grid">
+    {% for img in release.images %}
+    <form method="post" action="/albums/{{ album.id }}/cover">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <input type="hidden" name="uri" value="{{ img.uri }}">
+      <button class="art{{ ' art-selected' if img.uri == cover }}" type="submit" aria-pressed="{{ 'true' if img.uri == cover else 'false' }}" title="Use this image{{ ' (' ~ img.type ~ ')' if img.type }}">
+        <img src="{{ img.thumb }}" alt="Image {{ loop.index }}{{ ' (' ~ img.type ~ ')' if img.type }}" referrerpolicy="no-referrer">
+        {% if img.uri == cover %}<span class="art-tag">Displayed</span>{% endif %}
+      </button>
+    </form>
+    {% endfor %}
+  </div>
+</section>
+{% elif release and not release.images %}
+<p class="hint">This Discogs release has no album art.</p>
+{% endif %}
+
+{% if album.notes %}
+<section class="panel">
+  <h2>Your notes</h2>
+  <p class="prewrap">{{ album.notes }}</p>
+</section>
+{% endif %}
+
+{% if release %}
+<section class="panel">
+  <h2>Discogs details <a class="small" href="https://www.discogs.com/release/{{ album.discogs_release_id }}" target="_blank" rel="noopener noreferrer">View on Discogs</a></h2>
+  <dl class="facts">
+    {% if release.released %}<dt>Released</dt><dd>{{ release.released }}</dd>{% endif %}
+    {% if release.country %}<dt>Country</dt><dd>{{ release.country }}</dd>{% endif %}
+    {% if release.labels %}<dt>Label</dt><dd>{% for l in release.labels %}{{ l.name }}{% if l.catno %} &ndash; {{ l.catno }}{% endif %}{{ "; " if not loop.last }}{% endfor %}</dd>{% endif %}
+    {% if release.formats %}<dt>Format</dt><dd>{{ release.formats | join("; ") }}</dd>{% endif %}
+    {% if release.genres %}<dt>Genre</dt><dd>{{ release.genres | join(", ") }}</dd>{% endif %}
+    {% if release.styles %}<dt>Style</dt><dd>{{ release.styles | join(", ") }}</dd>{% endif %}
+    {% for i in release.identifiers if i.type == "Barcode" %}<dt>Barcode</dt><dd>{{ i.value }}</dd>{% endfor %}
+  </dl>
+  {% set other_ids = release.identifiers | rejectattr("type", "equalto", "Barcode") | list %}
+  {% if other_ids %}
+  <details class="more">
+    <summary>Matrix, runout, and other identifiers ({{ other_ids | length }})</summary>
+    <dl class="facts">
+      {% for i in other_ids %}<dt>{{ i.type }}</dt><dd>{{ i.value }}</dd>{% endfor %}
+    </dl>
+  </details>
+  {% endif %}
+</section>
+{% endif %}
+
+{% if pressings %}
+<section class="panel">
+  <h2>Pressings checked</h2>
+  <div class="table-wrap">
+  <table>
+    <thead>
+      <tr><th>Year</th><th>Country</th><th>Label</th><th>Cat #</th><th>Format</th><th class="num">For sale</th><th class="num">Lowest</th></tr>
+    </thead>
+    <tbody>
+      {% for p in pressings %}
+      <tr class="{{ 'chosen' if p.release_id == album.discogs_release_id }}">
+        <td><a href="https://www.discogs.com/release/{{ p.release_id }}" target="_blank" rel="noopener noreferrer">{{ p.year or "?" }}</a>{% if p.release_id == album.discogs_release_id %} <span class="chip chip-red">best match</span>{% endif %}</td>
+        <td>{{ p.country }}</td>
+        <td>{{ p.label }}</td>
+        <td>{{ p.catno }}</td>
+        <td class="wrap">{{ p.formats }}</td>
+        <td class="num">{{ p.num_for_sale if p.num_for_sale is not none else "" }}</td>
+        <td class="num">{{ p.price_cents | money }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</section>
+{% endif %}
+
+{% if release and release.tracks %}
+<section class="panel">
+  <h2>Tracklist</h2>
+  <table class="tracks">
+    <tbody>
+      {% for t in release.tracks %}
+      <tr><td class="pos">{{ t.position }}</td><td class="wrap">{{ t.title }}</td><td class="num">{{ t.duration }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endif %}
+
+{% if release and release.credits %}
+<section class="panel">
+  <h2>Credits</h2>
+  <ul class="credits">
+    {% for c in release.credits %}<li><strong>{{ c.name }}</strong> <span>{{ c.role }}</span></li>{% endfor %}
+  </ul>
+</section>
+{% endif %}
+
+{% if release and release.notes %}
+<section class="panel">
+  <h2>Release notes</h2>
+  <p class="prewrap">{{ release.notes }}</p>
+</section>
+{% endif %}
+
+<p class="meta">Added {{ album.created_at | eastern }}{% if album.discogs_checked_at %} &middot; Discogs checked {{ album.discogs_checked_at | eastern }}{% endif %}</p>
+{% endblock %}

@@ -3,30 +3,86 @@ import re
 import pytest
 from fastapi.testclient import TestClient
 
+from myvinyl import db
 from myvinyl.auth import hash_password
 from myvinyl.config import ConfigError, Settings
-from myvinyl.discogs import ValueLookup
+from myvinyl.discogs import Enrichment, Pressing
 from myvinyl.main import create_app
 
 PASSWORD = "correct horse battery"
 PASSWORD_HASH = hash_password(PASSWORD)
 
+RELEASE = {
+    "id": 28855534,
+    "title": "Substance",
+    "year": 2023,
+    "country": "Worldwide",
+    "labels": [{"name": "Factory", "catno": "Fact 200"}],
+    "formats": [{"name": "Vinyl", "qty": "2", "descriptions": ["LP", "Remastered"]}],
+    "genres": ["Electronic"],
+    "styles": ["Synth-pop"],
+    "tracklist": [{"position": "A1", "title": "Ceremony", "duration": "4:23"}],
+    "extraartists": [{"name": "Peter Saville", "role": "Design"}],
+    "identifiers": [{"type": "Barcode", "value": "190295371738"}],
+    "community": {"have": 5000, "want": 900, "rating": {"average": 4.6, "count": 300}},
+    "images": [
+        {"uri": "https://evil.example/x.jpg"},
+        {"uri": "https://i.discogs.com/cover.jpg", "type": "primary"},
+        {
+            "uri": "https://i.discogs.com/back.jpg",
+            "uri150": "https://i.discogs.com/back150.jpg",
+            "type": "secondary",
+        },
+    ],
+    "notes": "<b>Remastered</b> double LP",
+}
 
-class FakeLookup:
+
+def pressing(release_id, year, price):
+    return Pressing(
+        release_id,
+        "New Order - Substance",
+        year,
+        "UK",
+        "Factory",
+        "Fact 200",
+        "Vinyl, LP",
+        price,
+        3,
+    )
+
+
+class FakeEnricher:
     """Stands in for the Discogs API so tests never touch the network."""
 
     def __init__(self):
-        self.result = ValueLookup(release_id=28855534, value_cents=2448)
+        self.result = Enrichment(
+            release_id=28855534,
+            value_cents=2448,
+            low_cents=1800,
+            high_cents=7228,
+            median_cents=2448,
+            pressings=[
+                pressing(28855534, 2023, 2448),
+                pressing(28848151, 2023, 7228),
+                pressing(23662, 1987, 1800),
+                pressing(99, 1990, None),
+            ],
+            release=RELEASE,
+        )
         self.calls = []
+        self.error = None
 
     def __call__(self, artist, title, year):
         self.calls.append((artist, title, year))
+        if self.error:
+            raise self.error
         return self.result
 
 
 @pytest.fixture
 def lookup():
-    return FakeLookup()
+    return FakeEnricher()
 
 
 @pytest.fixture
@@ -35,7 +91,7 @@ def client(tmp_path, lookup):
         secret_key="x" * 48, password_hash=PASSWORD_HASH, db_path=tmp_path / "test.db"
     )
     # https base URL so the Secure session cookie is sent back.
-    app = create_app(settings, value_lookup=lookup)
+    app = create_app(settings, enricher=lookup)
     with TestClient(app, base_url="https://testserver") as c:
         yield c
 
@@ -130,7 +186,7 @@ def test_create_and_list(authed):
     html = authed.get("/").text
     assert "Kind of Blue" in html
     assert "$42.50" in html
-    assert "1 album " in html
+    assert re.search(r'stat-num">1</span><span class="stat-label">album<', html)
 
 
 def test_validation_errors(authed):
@@ -165,7 +221,7 @@ def test_search_and_sort(authed):
 
 def test_edit_and_delete(authed):
     add(authed)
-    edit_link = re.search(r'href="(/albums/\d+)/edit"', authed.get("/").text).group(1)
+    edit_link = first_album_link(authed)
     token = csrf_from(authed, f"{edit_link}/edit")
     r = authed.post(
         edit_link,
@@ -194,59 +250,177 @@ def test_csv_export_neutralizes_formulas(authed):
     assert "12.00" in r.text
 
 
-# --- Discogs value lookup ----------------------------------------------------------------
+# --- Discogs enrichment -----------------------------------------------------------------
 
 
-def first_edit_link(client):
-    return re.search(r'href="(/albums/\d+)/edit"', client.get("/").text).group(1)
+def first_album_link(client):
+    return re.search(r'href="(/albums/\d+)"', client.get("/").text).group(1)
 
 
-def test_blank_value_is_looked_up_on_create(authed, lookup):
-    add(authed, artist="New Order", title="Substance", year="2023")
-    assert lookup.calls == [("New Order", "Substance", 2023)]
-    assert "$24.48" in authed.get("/").text
-    edit = authed.get(first_edit_link(authed) + "/edit").text
-    assert "discogs.com/release/28855534" in edit
+def edit(client, link, **fields):
+    data = {"artist": "Miles Davis", "title": "Kind of Blue", "format": "LP", "condition": "VG+"}
+    data.update(fields)
+    data["csrf"] = csrf_from(client, link + "/edit")
+    return client.post(link, data=data, follow_redirects=False)
 
 
-def test_entered_value_skips_lookup(authed, lookup):
+def test_create_runs_lookup_and_redirects_to_album(authed, lookup):
+    r = add(authed, artist="New Order", title="Substance", year="2024")
+    assert re.fullmatch(r"/albums/\d+", r.headers["location"])
+    assert lookup.calls == [("New Order", "Substance", 2024)]
+    html = authed.get("/").text
+    assert "$24.48" in html and "$18.00" in html and "$72.28" in html  # value and range
+
+
+def test_album_page_shows_metadata_and_pressings(authed):
+    add(authed, artist="New Order", title="Substance")
+    page = authed.get(first_album_link(authed)).text
+    for expected in (
+        "Fact 200",
+        "Synth-pop",
+        "Ceremony",
+        "Peter Saville",
+        "190295371738",
+        "5000",
+        "best match",
+        "3 of 4 pressings",
+        "Median $24.48",
+    ):
+        assert expected in page, expected
+    # Discogs text is escaped, and only the allowlisted image host is rendered.
+    assert "<b>Remastered</b>" not in page and "&lt;b&gt;Remastered" in page
+    assert "https://i.discogs.com/cover.jpg" in page and "evil.example" not in page
+
+
+def test_blank_fields_are_filled_but_yours_are_kept(authed):
+    add(authed, artist="New Order", title="Substance")  # no year, no label
+    link = first_album_link(authed)
+    page = authed.get(link + "/edit").text
+    assert 'value="2023"' in page and 'value="Factory"' in page
+
+    add(authed, artist="New Order", title="Substance", year="2024", label="Mine")
+    html = authed.get("/?q=Mine").text
+    assert "2024" in html and "Mine" in html
+
+
+def test_entered_value_is_kept_but_range_recorded(authed, lookup):
     add(authed, value="10")
-    assert lookup.calls == []
-    assert "$10.00" in authed.get("/").text
+    assert lookup.calls  # range and metadata are still looked up
+    html = authed.get("/").text
+    assert "$10.00" in html and "$18.00" in html and "$24.48" not in html
 
 
-def test_failed_lookup_still_saves(authed, lookup):
+def test_no_match_and_errors_still_save(authed, lookup):
     lookup.result = None
-    assert add(authed).status_code == 303
-    assert "Kind of Blue" in authed.get("/").text
-
-
-def test_manual_edit_overrides_discogs_value(authed):
     add(authed)
-    link = first_edit_link(authed)
-    token = csrf_from(authed, link + "/edit")
-    data = {
-        "csrf": token,
-        "artist": "Miles Davis",
-        "title": "Kind of Blue",
-        "format": "LP",
-        "condition": "VG+",
-        "value": "99",
-    }
-    authed.post(link, data=data)
-    edit = authed.get(link + "/edit").text
-    assert "$99.00" in authed.get("/").text
-    assert "discogs.com/release" not in edit
+    page = authed.get(first_album_link(authed)).text
+    assert "No matching vinyl release" in page
+
+    lookup.error = OSError("offline")
+    add(authed, title="Sketches of Spain")
+    assert "Sketches of Spain" in authed.get("/").text
 
 
-def test_lookup_button(authed, lookup):
+def test_manual_value_survives_refresh(authed):
+    add(authed)
+    link = first_album_link(authed)
+    edit(authed, link, value="99")
+    token = csrf_from(authed, link)
+    authed.post(link + "/lookup", data={"csrf": token})
+    page = authed.get(link).text
+    assert "$99.00" in page and "Entered by you." in page
+
+
+def test_cleared_value_is_refilled_by_refresh(authed, lookup):
     add(authed, value="5")
-    link = first_edit_link(authed)
-    token = csrf_from(authed, link + "/edit")
-    r = authed.post(link + "/lookup", data={"csrf": token})
-    assert "Value updated from Discogs." in r.text
-    assert "$24.48" in authed.get("/").text
+    link = first_album_link(authed)
+    edit(authed, link, value="")
+    token = csrf_from(authed, link)
+    authed.post(link + "/lookup", data={"csrf": token})
+    assert "$24.48" in authed.get(link).text
 
-    lookup.result = None
-    r = authed.post(link + "/lookup", data={"csrf": token})
-    assert "No Discogs match" in r.text
+
+def test_pending_lookup_auto_refreshes_and_is_not_requeued(authed, lookup, tmp_path):
+    add(authed)
+    link = first_album_link(authed)
+    album_id = int(link.rsplit("/", 1)[1])
+    db.set_discogs_status(tmp_path / "test.db", album_id, "pending")  # simulate in-flight
+    page = authed.get(link).text
+    assert 'http-equiv="refresh"' in page and "Looking up" in page
+
+    lookup.calls.clear()
+    authed.post(link + "/lookup", data={"csrf": csrf_from(authed, link)})
+    assert lookup.calls == []
+
+
+def test_interrupted_lookups_marked_on_startup(tmp_path):
+    path = tmp_path / "test.db"
+    db.init(path)
+    album_id = db.create_album(
+        path,
+        {
+            "artist": "A",
+            "title": "B",
+            "year": None,
+            "label": "",
+            "format": "LP",
+            "condition": "M",
+            "notes": "",
+            "value_cents": None,
+        },
+    )
+    db.set_discogs_status(path, album_id, "pending")
+    db.init(path)
+    assert db.get_album(path, album_id)["discogs_status"] == "error"
+
+
+def test_csv_includes_range(authed):
+    add(authed)
+    text = authed.get("/export.csv").text
+    assert "value_low" in text.splitlines()[0]
+    assert "18.00" in text and "72.28" in text and "28855534" in text
+
+
+# --- Album art, times, icons ---------------------------------------------------------------
+
+
+def test_choose_album_art(authed):
+    add(authed, artist="New Order", title="Substance")
+    link = first_album_link(authed)
+    page = authed.get(link).text
+    assert "2 images from Discogs" in page and "back150.jpg" in page
+    assert re.search(r'<img class="cover" src="https://i.discogs.com/cover.jpg"', page)
+
+    token = csrf_from(authed, link)
+    authed.post(link + "/cover", data={"csrf": token, "uri": "https://i.discogs.com/back.jpg"})
+    page = authed.get(link).text
+    assert re.search(r'<img class="cover" src="https://i.discogs.com/back.jpg"', page)
+
+
+def test_cover_must_be_one_of_the_release_images(authed):
+    add(authed, artist="New Order", title="Substance")
+    link = first_album_link(authed)
+    token = csrf_from(authed, link)
+    for uri in ("https://evil.example/x.jpg", "https://i.discogs.com/not-in-release.jpg"):
+        r = authed.post(link + "/cover", data={"csrf": token, "uri": uri})
+        assert r.status_code == 400
+    assert (
+        authed.post(link + "/cover", data={"uri": "https://i.discogs.com/back.jpg"}).status_code
+        == 403
+    )
+
+
+def test_times_shown_in_eastern(authed):
+    from myvinyl.main import eastern_time
+
+    assert eastern_time("2026-07-01 16:30:00") == "Jul 1, 2026 12:30 PM EDT"
+    assert eastern_time("2026-12-01 16:30:00") == "Dec 1, 2026 11:30 AM EST"
+    add(authed)
+    page = authed.get(first_album_link(authed)).text
+    assert re.search(r"Added \w{3} \d{1,2}, \d{4} \d{1,2}:\d{2} [AP]M E[SD]T", page)
+
+
+def test_favicon_and_logo_served(client):
+    assert client.get("/favicon.ico").status_code == 200
+    r = client.get("/static/logo.svg")
+    assert r.status_code == 200 and "<svg" in r.text
