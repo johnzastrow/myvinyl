@@ -25,6 +25,7 @@ CREATE TABLE IF NOT EXISTS users (
     bio             TEXT NOT NULL DEFAULT '',
     theme           TEXT NOT NULL DEFAULT 'auto',
     discogs_username TEXT NOT NULL DEFAULT '',
+    email           TEXT,             -- optional; for future email features (SMTP2GO)
     created_at      TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     last_login_at   TEXT
 );
@@ -182,6 +183,7 @@ USER_MIGRATIONS = {
     "bio": "TEXT NOT NULL DEFAULT ''",
     "theme": "TEXT NOT NULL DEFAULT 'auto'",
     "discogs_username": "TEXT NOT NULL DEFAULT ''",
+    "email": "TEXT",
 }
 
 _condition_rank = " ".join(f"WHEN '{c}' THEN {i}" for i, c in enumerate(CONDITIONS))
@@ -233,6 +235,11 @@ def init(path: Path) -> None:
         for column, ddl in USER_MIGRATIONS.items():
             if column not in existing:
                 conn.execute(f"ALTER TABLE users ADD COLUMN {column} {ddl}")  # fixed names
+        # One account per email address, ignoring letter case.
+        conn.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS ux_users_email ON users (lower(email))"
+            " WHERE email IS NOT NULL"
+        )
         conn.execute("CREATE INDEX IF NOT EXISTS ix_albums_owner ON albums (owner_id, deleted_at)")
         # Lookups run in the background; any left 'pending' were cut off by a restart.
         conn.execute("UPDATE albums SET discogs_status = 'error' WHERE discogs_status = 'pending'")
@@ -249,13 +256,29 @@ def count_users(path: Path) -> int:
         return conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
 
 
-def create_user(path: Path, username: str, password_hash: str, role: str = "member") -> int:
+def create_user(
+    path: Path,
+    username: str,
+    password_hash: str,
+    role: str = "member",
+    email: str | None = None,
+) -> int:
     with connect(path) as conn:
         cur = conn.execute(
-            "INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)",
-            (username, password_hash, role),
+            "INSERT INTO users (username, password_hash, role, email) VALUES (?, ?, ?, ?)",
+            (username, password_hash, role, email),
         )
         return cur.lastrowid
+
+
+def email_in_use(path: Path, email: str, except_user: int | None = None) -> bool:
+    with connect(path) as conn:
+        return bool(
+            conn.execute(
+                "SELECT 1 FROM users WHERE lower(email) = lower(?) AND id != ?",
+                (email, except_user or 0),
+            ).fetchone()
+        )
 
 
 def get_user(path: Path, user_id: int):
@@ -305,6 +328,34 @@ def set_password(path: Path, user_id: int, password_hash: str) -> None:
             " WHERE id = ?",
             (password_hash, user_id),
         )
+
+
+def set_identity(path: Path, user_id: int, username: str, email: str | None) -> str:
+    """Change username and email together.
+
+    Returns '' on success, or 'username' / 'email' naming the value another account
+    already uses (compared ignoring letter case).
+    """
+    with connect(path) as conn:
+        if conn.execute(
+            "SELECT 1 FROM users WHERE username = ? AND id != ?", (username, user_id)
+        ).fetchone():
+            return "username"
+        if (
+            email
+            and conn.execute(
+                "SELECT 1 FROM users WHERE lower(email) = lower(?) AND id != ?", (email, user_id)
+            ).fetchone()
+        ):
+            return "email"
+        try:
+            conn.execute(
+                "UPDATE users SET username = ?, email = ? WHERE id = ?",
+                (username, email, user_id),
+            )
+        except sqlite3.IntegrityError:  # lost a race with another change
+            return "username"
+    return ""
 
 
 def set_profile(path: Path, user_id: int, profile: dict) -> None:

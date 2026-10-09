@@ -51,6 +51,24 @@
   </form>
 </div>
 
+<form class="panel narrow" method="post" action="/account/identity">
+  <h2>Username and email</h2>
+  {% if saved == "identity" %}<p class="notice">Saved. If you changed your username, use the new one next time you log in.</p>{% endif %}
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <label for="new-username">Username</label>
+  <input id="new-username" name="username" value="{{ me.username }}" maxlength="32" autocomplete="username" required>
+  <p class="hint">3 to 32 letters, digits, dots, dashes, or underscores. Your albums and settings stay the same.</p>
+  {% if errors.username %}<p class="error">{{ errors.username }}</p>{% endif %}
+  <label for="email">Email (optional)</label>
+  <input id="email" name="email" type="email" value="{{ me.email or '' }}" maxlength="254" autocomplete="email">
+  <p class="hint">Not used yet; it's kept for future email notices and password resets. Only you and admins can see it.</p>
+  {% if errors.email %}<p class="error">{{ errors.email }}</p>{% endif %}
+  <label for="identity-current">Current password</label>
+  <input id="identity-current" name="current" type="password" autocomplete="current-password" required>
+  {% if errors.identity_current %}<p class="error">{{ errors.identity_current }}</p>{% endif %}
+  <div class="actions"><button type="submit">Save username and email</button></div>
+</form>
+
 <form class="panel narrow" method="post" action="/account/sign-out-everywhere">
   <h2>Sessions</h2>
   <input type="hidden" name="csrf" value="{{ csrf }}">

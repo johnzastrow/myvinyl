@@ -22,6 +22,12 @@ stack in `~/myvinyldocker`, container `myvinyl` on `127.0.0.1:8094`).
 - [ ] (decision) Second factor (TOTP), or put the site behind Caddy forward-auth or a VPN.
 - [ ] Re-run the security review after major changes; run `pip-audit` on dependency bumps.
 
+### Email (decision)
+- [ ] Send email through SMTP2GO: invite links sent by email, self-service password
+      reset, wishlist price alerts. Needs an SMTP2GO account, a verified sender domain
+      (SPF/DKIM on fluidgrid.site), and the API key or SMTP credentials in `.env`.
+      Accounts already have an optional, unique `email` field (0.6.1).
+
 ## Ideas, not scheduled
 - Condition-based price suggestions from Discogs (token, possibly seller settings).
 - Separate sleeve grade (Goldmine grades record and sleeve separately).

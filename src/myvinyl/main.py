@@ -21,7 +21,7 @@ from fastapi.templating import Jinja2Templates
 from starlette.concurrency import run_in_threadpool
 from starlette.middleware.sessions import SessionMiddleware
 
-from . import charts, db, discogs
+from . import __version__, charts, db, discogs
 from .albums import (
     CONDITIONS,
     FORMATS,
@@ -36,6 +36,7 @@ from .albums import (
     format_money,
     format_stars,
     parse_album,
+    parse_email,
     parse_identifier,
     parse_money,
     parse_profile,
@@ -383,6 +384,7 @@ def create_app(
     templates.env.filters["eastern"] = eastern_time
     templates.env.filters["eastern_date"] = eastern_date
     templates.env.filters["stars"] = format_stars
+    templates.env.globals["version"] = __version__
     limiter = LoginLimiter()
     hash_slots = asyncio.Semaphore(HASH_SLOTS)
 
@@ -566,13 +568,18 @@ def create_app(
         password_error = check_new_password(form.get("password"), form.get("confirm"))
         if password_error:
             errors["password"] = password_error
-        username = ""
+        username, email = "", None
         if link["kind"] == "invite":
             username, error = parse_username(form.get("username"))
             if error:
                 errors["username"] = error
             elif db.get_user_by_name(path, username):
                 errors["username"] = "That username is taken."
+            email, error = parse_email(form.get("email"))
+            if error:
+                errors["email"] = error
+            elif email and db.email_in_use(path, email):
+                errors["email"] = "That email is already used by another account."
         if errors:
             return render(
                 request,
@@ -583,13 +590,14 @@ def create_app(
                 token=token,
                 errors=errors,
                 username=str(form.get("username", ""))[:32],
+                email=str(form.get("email", ""))[:254],
             )
         if not db.use_link(path, link["id"]):
             return render(request, "link.html", 404, invalid=True)
         new_hash = await make_hash(form["password"])
         if link["kind"] == "invite":
             try:
-                user_id = db.create_user(path, username, new_hash, link["role"])
+                user_id = db.create_user(path, username, new_hash, link["role"], email)
             except sqlite3.IntegrityError:  # someone took the name a moment ago
                 return render(
                     request,
@@ -626,6 +634,32 @@ def create_app(
     @router.get("/account")
     async def account_page(request: Request):
         return account_page_response(request)
+
+    @router.post("/account/identity")
+    async def change_own_identity(request: Request):
+        """Change your username and/or email. Requires your current password, because
+        a future email-based password reset would make the address security-sensitive."""
+        form = await checked_form(request)
+        user = request.state.user
+        username, username_error = parse_username(form.get("username"))
+        email, email_error = parse_email(form.get("email"))
+        current = form.get("current")
+        errors = {}
+        if username_error:
+            errors["username"] = username_error
+        if email_error:
+            errors["email"] = email_error
+        if not isinstance(current, str) or not await check_password(user["password_hash"], current):
+            errors["identity_current"] = "That isn't your current password."
+        if not errors:
+            clash = db.set_identity(path, user["id"], username, email)
+            if clash:
+                errors[clash] = f"That {clash} is already used by another account."
+        if errors:
+            return account_page_response(request, 422, errors=errors)
+        request.state.user = db.get_user(path, user["id"])
+        log.info("user %s updated their username/email", user["id"])
+        return account_page_response(request, saved="identity")
 
     @router.post("/account/sign-out-everywhere")
     async def sign_out_everywhere(request: Request):
@@ -1252,6 +1286,23 @@ def create_app(
             raise HTTPException(status_code=400, detail="Choose a role.")
         guard_last_admin(user, becoming_inactive=role != "admin")
         db.set_user_role(path, user_id, role)
+        return RedirectResponse("/admin", status_code=303)
+
+    @admin.post("/users/{user_id}/identity")
+    async def set_user_identity(request: Request, user_id: int):
+        """Admin: change any account's username and email."""
+        form = await checked_form(request)
+        target_user(request, user_id)
+        username, error = parse_username(form.get("username"))
+        email, email_error = parse_email(form.get("email"))
+        error = error or email_error
+        if not error:
+            clash = db.set_identity(path, user_id, username, email)
+            if clash:
+                error = f"That {clash} is already used by another account."
+        if error:
+            return admin_page(request, 422, identity_error=error, identity_user=user_id)
+        log.info("admin %s updated username/email of user %s", request.state.user["id"], user_id)
         return RedirectResponse("/admin", status_code=303)
 
     @admin.post("/links/{link_id}/revoke")

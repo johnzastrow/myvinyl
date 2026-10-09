@@ -214,6 +214,22 @@ def parse_profile(form: Mapping) -> tuple[dict, dict[str, str]]:
     return profile, errors
 
 
+EMAIL_RE = re.compile(
+    r"[^@\s<>\"',;]+"  # local part: no spaces, brackets, quotes, commas
+    r"@[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\.[A-Za-z0-9-]+)+"  # domain with a dot
+)
+
+
+def parse_email(raw) -> tuple[str | None, str]:
+    """Optional email address: (address or None, error). Blank means none."""
+    text = str(raw or "").strip()
+    if not text:
+        return None, ""
+    if len(text) > 254 or not EMAIL_RE.fullmatch(text):
+        return None, "Enter a valid email address, or leave it blank."
+    return text, ""
+
+
 def check_new_password(password, confirm) -> str:
     """Return an error message, or '' if the new password is acceptable."""
     if not isinstance(password, str) or not isinstance(confirm, str):

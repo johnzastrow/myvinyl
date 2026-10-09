@@ -30,6 +30,8 @@
 - [Project layout](#project-layout)
 - [Changelog](#changelog)
 
+For day-to-day instructions, see the **[User Guide](USERGUIDE.md)**.
+
 ---
 
 ## Features
@@ -87,7 +89,8 @@
 - **Admins** can view and change any collection, invite people, reset passwords, and
   disable accounts.
 - **Invite links:** one-time, expire after 7 days; there is no open sign-up.
-- **Profiles:** display name, about text, Discogs username (pre-fills imports), and theme.
+- **Profiles:** display name, about text, Discogs username (pre-fills imports), theme,
+  and optional email. Usernames can be changed by the user or an admin.
 
 ### Themes
 Five themes in Buffalo Bills colors, chosen per user: **Royal blue**, **Navy**,
@@ -224,6 +227,11 @@ Notes:
 - **Forgotten password:** an admin clicks **Reset password** to create a one-time reset
   link. Using it signs the user out everywhere.
 - **Disable** blocks sign-in and ends the user's sessions immediately; their data is kept.
+- **Renaming:** users change their own username and email on the Profile page (current
+  password required); admins can change any account's username and email in the Users
+  table.
+- **Email** is optional and unique per account. It isn't used yet; it's stored for future
+  email features (planned through SMTP2GO).
 - **Profile:** display name, about text, Discogs username, theme, password change, and
   **Sign out everywhere**.
 
@@ -321,7 +329,7 @@ is described step by step in **[deploy/DEPLOY.md](deploy/DEPLOY.md)**:
 
 ```powershell
 uv sync                                        # install, including dev tools
-uv run pytest                                  # 79 tests; Discogs is faked, no network
+uv run pytest                                  # 83 tests; Discogs is faked, no network
 uv run ruff check --fix . ; uv run ruff format .
 ```
 
@@ -352,7 +360,7 @@ myvinyl/
 ├── deploy/              # DEPLOY.md, Caddy site block, env template
 ├── docs/screenshots/    # Images used in this README
 ├── Dockerfile, compose.yaml
-├── SECURITY.md, CHANGELOG.md, TODO.md
+├── USERGUIDE.md, SECURITY.md, CHANGELOG.md, TODO.md
 └── pyproject.toml, uv.lock
 ```
 
@@ -361,6 +369,11 @@ myvinyl/
 ## Changelog
 
 The full history is in [CHANGELOG.md](CHANGELOG.md).
+
+### 0.6.1 - 2026-10-09
+- **Added:** change usernames (users on their Profile with their password; admins for
+  anyone); optional, unique email address per account (profile, admin, and invite sign-up),
+  stored for future email features. USERGUIDE.md.
 
 ### 0.6.0 - 2026-10-09
 - **Added:** multiple users with private collections, admin role, invite and reset links,

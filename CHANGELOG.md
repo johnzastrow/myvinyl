@@ -2,6 +2,22 @@
 
 All notable changes to myvinyl. Versions follow [semantic versioning](https://semver.org/).
 
+## 0.6.1 - 2026-10-09
+
+### Added
+- **Change usernames.** Users change their own username on the Profile page (current
+  password required). Admins can change any account's username from the Users table.
+  Sessions, albums, and settings are unaffected.
+- **Email addresses.** Optional, unique (ignoring letter case) email per account. It can
+  be set on the Profile page (current password required), by admins, or when accepting an
+  invite. It isn't used yet; it's stored for planned email features (SMTP2GO).
+- Version number in the footer of every page, linking to the changelog.
+- `USERGUIDE.md` with concise instructions for using and administering the site.
+- `MYVINYL_HOST_PORT` setting for the published host port in `compose.yaml`.
+
+### Upgrade notes
+- A `users.email` column and a unique index on it are added automatically on startup.
+
 ## 0.6.0 - 2026-10-09
 
 ### Added

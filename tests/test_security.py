@@ -61,3 +61,10 @@ def test_album_cap_per_account(authed, monkeypatch):
     monkeypatch.setattr(main, "MAX_ALBUMS_PER_USER", 1)  # read at request time
     assert add(authed).status_code == 303
     assert add(authed, title="One too many").status_code == 400
+
+
+def test_version_shown_in_footer(client):
+    from myvinyl import __version__
+
+    page = client.get("/login").text
+    assert f"myvinyl v{__version__}" in page and 'class="site-footer"' in page

@@ -16,6 +16,9 @@
   <label for="username">Username</label>
   <input id="username" name="username" value="{{ username or '' }}" autocomplete="username" maxlength="32" required autofocus>
   {% if errors.username %}<p class="error">{{ errors.username }}</p>{% endif %}
+  <label for="email">Email (optional)</label>
+  <input id="email" name="email" type="email" value="{{ email or '' }}" maxlength="254" autocomplete="email">
+  {% if errors.email %}<p class="error">{{ errors.email }}</p>{% endif %}
   {% else %}
   <h1>Set a new password</h1>
   <p class="muted">For account <strong>{{ target.username if target else "" }}</strong>.</p>

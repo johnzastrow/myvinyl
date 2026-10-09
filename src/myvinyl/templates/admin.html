@@ -19,7 +19,16 @@
     <tbody>
       {% for u in users %}
       <tr>
-        <td><strong>{{ u.username }}</strong>{% if u.id == me.id %} <span class="muted">(you)</span>{% endif %}</td>
+        <td>
+          <form class="inline identity-form" method="post" action="/admin/users/{{ u.id }}/identity">
+            <input type="hidden" name="csrf" value="{{ csrf }}">
+            <input name="username" value="{{ u.username }}" maxlength="32" aria-label="Username for {{ u.username }}" class="rename-input">
+            <input name="email" type="email" value="{{ u.email or '' }}" maxlength="254" placeholder="email (optional)" aria-label="Email for {{ u.username }}" class="email-input">
+            <button class="button-small" type="submit">Save</button>
+          </form>
+          {% if u.id == me.id %}<span class="muted">(you)</span>{% endif %}
+          {% if identity_error and identity_user == u.id %}<p class="error">{{ identity_error }}</p>{% endif %}
+        </td>
         <td>
           <form class="inline" method="post" action="/admin/users/{{ u.id }}/role">
             <input type="hidden" name="csrf" value="{{ csrf }}">

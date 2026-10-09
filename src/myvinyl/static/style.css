@@ -322,6 +322,9 @@ td.wrap { white-space: normal; }
 .row-actions { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
 .row-actions form, form.inline { display: inline-flex; gap: 6px; align-items: center; margin: 0; }
 form.inline select { width: auto; padding: 4px 6px; }
+form.inline .rename-input { width: 140px; padding: 4px 6px; }
+form.inline .email-input { width: 210px; padding: 4px 6px; }
+.identity-form { flex-wrap: wrap; }
 
 .cover-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 16px; }
 .tile {
@@ -510,6 +513,19 @@ button.art-selected { border-color: var(--red); box-shadow: 0 0 0 2px var(--whit
 .bar-cell { width: 45%; }
 .barline { display: block; width: 100%; height: 12px; }
 .barline rect { fill: var(--red); }
+
+/* --- Footer ------------------------------------------------------------------------------ */
+
+.site-footer {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 16px 16px 32px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 0.8rem;
+  text-align: center;
+}
+.site-footer a { color: var(--muted); }
 
 /* --- Printed report ----------------------------------------------------------------------- */
 

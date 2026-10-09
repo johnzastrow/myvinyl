@@ -391,3 +391,88 @@ def test_backups_and_retention(authed, tmp_path):
         time.sleep(1.1)  # names have one-second resolution
         storage.backup(keep=2)
     assert len(storage.list_backups()) == 2
+
+
+# --- Usernames and emails ------------------------------------------------------------------
+
+
+def test_user_changes_own_username_and_email(authed, tmp_path):
+    token = csrf_from(authed, "/account")
+
+    def save(**data):
+        return authed.post("/account/identity", data={"csrf": token, **data})
+
+    r = save(username="john", email="john@example.com", current="wrong")
+    assert r.status_code == 422 and "your current password" in r.text
+    r = save(username="x", email="", current=PASSWORD)
+    assert "3 to 32" in r.text
+    r = save(username="john", email="not-an-email", current=PASSWORD)
+    assert "valid email" in r.text
+    r = save(username="john", email="John@Example.com", current=PASSWORD)
+    assert r.status_code == 200 and "Saved." in r.text
+    user = db.get_user(tmp_path / "test.db", 1)
+    assert user["username"] == "john" and user["email"] == "John@Example.com"
+    # Still signed in (sessions are tied to the account, not the name); new name logs in.
+    assert authed.get("/").status_code == 200
+    fresh = TestClient(authed.app, base_url="https://testserver")
+    assert login(fresh, PASSWORD, "admin").status_code == 401
+    assert login(fresh, PASSWORD, "john").status_code == 303
+    # Clearing the email is allowed.
+    save(username="john", email="", current=PASSWORD)
+    assert db.get_user(tmp_path / "test.db", 1)["email"] is None
+
+
+def test_usernames_and_emails_stay_unique(authed, second, tmp_path):
+    token = csrf_from(authed, "/account")
+    authed.post(
+        "/account/identity",
+        data={"csrf": token, "username": "admin", "email": "me@example.com", "current": PASSWORD},
+    )
+    t2 = csrf_from(second, "/account")
+    r = second.post(
+        "/account/identity",
+        data={"csrf": t2, "username": "ADMIN", "email": "", "current": NEW_PASSWORD},
+    )
+    assert "username is already used" in r.text
+    r = second.post(
+        "/account/identity",
+        data={"csrf": t2, "username": "bob", "email": "ME@example.com", "current": NEW_PASSWORD},
+    )
+    assert "email is already used" in r.text
+
+
+def test_admin_sets_username_and_email(authed, second, tmp_path):
+    bob = db.get_user_by_name(tmp_path / "test.db", "bob")
+    token = csrf_from(authed, "/admin")
+    r = authed.post(
+        f"/admin/users/{bob['id']}/identity",
+        data={"csrf": token, "username": "robert", "email": "rob@example.com"},
+        follow_redirects=False,
+    )
+    assert r.status_code == 303
+    user = db.get_user(tmp_path / "test.db", bob["id"])
+    assert user["username"] == "robert" and user["email"] == "rob@example.com"
+    assert 'value="rob@example.com"' in authed.get("/admin").text
+    r = authed.post(
+        f"/admin/users/{bob['id']}/identity",
+        data={"csrf": token, "username": "admin", "email": ""},
+    )
+    assert r.status_code == 422 and "username is already used" in r.text
+    # Members can't use the admin endpoint.
+    t2 = csrf_from(second, "/account")
+    r = second.post(
+        f"/admin/users/{bob['id']}/identity", data={"csrf": t2, "username": "z12", "email": ""}
+    )
+    assert r.status_code == 404
+
+
+def test_invite_accepts_optional_email(authed, tmp_path):
+    link = make_link(authed)
+    other = TestClient(authed.app, base_url="https://testserver")
+    token = csrf_from(other, link)
+    base = {"csrf": token, "username": "carol", "password": NEW_PASSWORD, "confirm": NEW_PASSWORD}
+    r = other.post(link, data={**base, "email": "bad"}, follow_redirects=False)
+    assert r.status_code == 422 and "valid email" in r.text
+    r = other.post(link, data={**base, "email": "carol@example.com"}, follow_redirects=False)
+    assert r.status_code == 303
+    assert db.get_user_by_name(tmp_path / "test.db", "carol")["email"] == "carol@example.com"
