@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}Profile - myvinyl{% endblock %}
+{% block content %}
+{% set p = profile or me %}
+<h1>Profile</h1>
+<p class="muted">Signed in as <strong>{{ me.username }}</strong> ({{ me.role }}){% if me.last_login_at %} &middot; last login {{ me.last_login_at | eastern }}{% endif %}.</p>
+
+<div class="two-col">
+  <form class="panel" method="post" action="/account/profile">
+    <h2>About you</h2>
+    {% if saved == "profile" %}<p class="notice">Profile saved.</p>{% endif %}
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <label for="display_name">Display name</label>
+    <input id="display_name" name="display_name" value="{{ p.display_name }}" maxlength="60" placeholder="{{ me.username }}">
+    {% if errors.display_name %}<p class="error">{{ errors.display_name }}</p>{% endif %}
+    <label for="bio">About</label>
+    <textarea id="bio" name="bio" rows="3" maxlength="1000" placeholder="Favorite genres, what you collect, ...">{{ p.bio }}</textarea>
+    {% if errors.bio %}<p class="error">{{ errors.bio }}</p>{% endif %}
+    <label for="discogs_username">Discogs username</label>
+    <input id="discogs_username" name="discogs_username" value="{{ p.discogs_username }}" maxlength="100">
+    <p class="hint">Fills in the collection and wantlist import forms.</p>
+    {% if errors.discogs_username %}<p class="error">{{ errors.discogs_username }}</p>{% endif %}
+
+    <label>Theme</label>
+    <div class="theme-choices" role="radiogroup" aria-label="Theme">
+      {% for key, label in themes.items() %}
+      <label class="theme-choice">
+        <input type="radio" name="theme" value="{{ key }}" {{ "checked" if p.theme == key }}>
+        <span class="swatch swatch-{{ key }}" aria-hidden="true"></span>
+        <span>{{ label }}</span>
+      </label>
+      {% endfor %}
+    </div>
+    {% if errors.theme %}<p class="error">{{ errors.theme }}</p>{% endif %}
+    <div class="actions"><button type="submit">Save profile</button></div>
+  </form>
+
+  <form class="panel" method="post" action="/account">
+    <h2>Change password</h2>
+    {% if saved == "password" %}<p class="notice">Password changed. Other sessions have been signed out.</p>{% endif %}
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <label for="current">Current password</label>
+    <input id="current" name="current" type="password" autocomplete="current-password" required>
+    {% if errors.current %}<p class="error">{{ errors.current }}</p>{% endif %}
+    <label for="password">New password (12+ characters)</label>
+    <input id="password" name="password" type="password" autocomplete="new-password" minlength="12" maxlength="256" required>
+    <label for="confirm">Repeat new password</label>
+    <input id="confirm" name="confirm" type="password" autocomplete="new-password" minlength="12" maxlength="256" required>
+    {% if errors.password %}<p class="error">{{ errors.password }}</p>{% endif %}
+    <div class="actions"><button type="submit">Change password</button></div>
+  </form>
+</div>
+
+<form class="panel narrow" method="post" action="/account/sign-out-everywhere">
+  <h2>Sessions</h2>
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <p class="muted">"Log out" ends this browser's session. If you used myvinyl on a shared or lost device, sign out everywhere instead.</p>
+  <div class="actions"><button class="button-outline" type="submit">Sign out everywhere</button></div>
+</form>
+{% endblock %}

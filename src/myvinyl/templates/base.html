@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="{{ me.theme if me else 'auto' }}">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -10,18 +10,35 @@
   <link rel="stylesheet" href="/static/style.css">
   {% block head %}{% endblock %}
 </head>
-<body>
+<body class="{% block body_class %}{% endblock %}">
   <div class="bar">
     <header>
       <a class="brand" href="/"><img class="brand-logo" src="/static/logo.svg" alt="" width="34" height="34">myvinyl</a>
-      {% if request.session.get("user") %}
-      <form method="post" action="/logout">
-        <input type="hidden" name="csrf" value="{{ csrf }}">
-        <button class="link" type="submit">Log out</button>
-      </form>
+      {% if me %}
+      <nav class="nav" aria-label="Main">
+        <a href="/">Collection</a>
+        <a href="/wishlist">Wishlist</a>
+        <a href="/stats">Stats</a>
+        <a href="/trash">Trash</a>
+        {% if me.role == "admin" %}<a href="/admin">Admin</a>{% endif %}
+        <a href="/account" title="Profile and account">{{ me.display_name or me.username }}</a>
+        <form method="post" action="/logout">
+          <input type="hidden" name="csrf" value="{{ csrf }}">
+          <button class="link" type="submit">Log out</button>
+        </form>
+      </nav>
       {% endif %}
     </header>
   </div>
+  {% if viewing %}
+  <div class="viewing">
+    <form method="post" action="/admin/view-mine">
+      Viewing <strong>{{ viewing.display_name or viewing.username }}</strong>'s collection as admin.
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <button class="link" type="submit">Back to mine</button>
+    </form>
+  </div>
+  {% endif %}
   <main>
     {% block content %}{% endblock %}
   </main>

@@ -5,12 +5,15 @@
 {% endblock %}
 {% block content %}
 <section class="album-head">
-  {% if cover %}
+  {% if local_cover %}
+  <img class="cover" src="/covers/{{ album.id }}?v={{ album.cover_file }}" alt="Cover of {{ album.title }}">
+  {% elif cover %}
   <img class="cover" src="{{ cover }}" alt="Cover of {{ album.title }}" referrerpolicy="no-referrer">
   {% else %}
   <div class="cover cover-blank" aria-hidden="true"><span></span></div>
   {% endif %}
   <div class="album-title">
+    {% if owner and owner.id != me.id %}<p class="hint">In {{ owner.display_name or owner.username }}'s collection</p>{% endif %}
     <p class="eyebrow">{{ album.artist }}</p>
     <h1>{{ album.title }}</h1>
     <p class="chips">
@@ -68,6 +71,17 @@
     <p class="hint">{% if release.rating %}Rated {{ "%.2f" | format(release.rating) }} / 5 by {{ release.rating_count }}{% else %}No ratings{% endif %}</p>
   </div>
   {% endif %}
+  <div class="card">
+    <h2>Purchase</h2>
+    {% if album.purchase_cents is not none %}
+    <p class="big">{{ album.purchase_cents | money }}
+      {% if album.value_cents is not none %}{% set gain = album.value_cents - album.purchase_cents %}<small class="{{ 'gain' if gain >= 0 else 'loss' }}">{{ "+" if gain >= 0 }}{{ gain | money }}</small>{% endif %}</p>
+    <p class="hint">{% if album.purchase_date %}{{ album.purchase_date }}{% endif %}{% if album.purchased_from %}{{ " from " if album.purchase_date else "From " }}{{ album.purchased_from }}{% endif %}</p>
+    {% else %}
+    <p class="big">&ndash;</p>
+    <p class="hint"><a href="/albums/{{ album.id }}/edit">Add what you paid</a></p>
+    {% endif %}
+  </div>
 </section>
 
 {% if chart %}
@@ -125,12 +139,32 @@
 <p class="hint">This Discogs release has no album art.</p>
 {% endif %}
 
-{% if album.notes %}
-<section class="panel">
-  <h2>Your notes</h2>
-  <p class="prewrap">{{ album.notes }}</p>
+<section class="panel" id="journal">
+  <h2>Notes</h2>
+  {% if album.notes %}<p class="prewrap">{{ album.notes }}</p>{% endif %}
+  <form method="post" action="/albums/{{ album.id }}/notes">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <label for="note-body" class="sr-only">Add a dated note</label>
+    <textarea id="note-body" name="body" rows="2" maxlength="2000" placeholder="Add a dated note: where you found it, a cleaning, a play, a story..." required></textarea>
+    <div class="actions"><button class="button-small" type="submit">Add note</button></div>
+  </form>
+  {% if notes %}
+  <ul class="journal">
+    {% for n in notes %}
+    <li>
+      <div class="when">
+        <span>{{ n.created_at | eastern }}{% if n.author and owner and n.author != owner.username %} &middot; {{ n.author }}{% endif %}</span>
+        <form method="post" action="/albums/{{ album.id }}/notes/{{ n.id }}/delete">
+          <input type="hidden" name="csrf" value="{{ csrf }}">
+          <button class="link danger-link" type="submit">Delete</button>
+        </form>
+      </div>
+      <p class="prewrap">{{ n.body }}</p>
+    </li>
+    {% endfor %}
+  </ul>
+  {% endif %}
 </section>
-{% endif %}
 
 {% if release %}
 <section class="panel">

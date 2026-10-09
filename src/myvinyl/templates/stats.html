@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}Stats - myvinyl{% endblock %}
+{% macro bars(title, groups, money=false) -%}
+<div class="panel">
+  <h2>{{ title }}</h2>
+  {% if groups %}
+  {% set top = groups | map(attribute="count") | max %}
+  <table class="bars">
+    {% for g in groups %}
+    <tr>
+      <th>{{ g.label }}</th>
+      <td class="bar-cell">
+        <svg viewBox="0 0 100 10" preserveAspectRatio="none" class="barline" aria-hidden="true"><rect x="0" y="0" height="10" width="{{ (g.count / top * 100) | round(1) }}"/></svg>
+      </td>
+      <td class="num">{{ g.count }}</td>
+      <td class="num muted">{{ g.value | money }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% else %}<p class="muted">Nothing here yet.</p>{% endif %}
+</div>
+{%- endmacro %}
+{% block content %}
+<h1>Stats</h1>
+{% with action="/stats" %}{% include "_filters.html" %}{% endwith %}
+
+<section class="stats">
+  <div class="stat"><span class="stat-num">{{ totals.count }}</span><span class="stat-label">albums</span></div>
+  <div class="stat"><span class="stat-num">{{ totals.value | money }}</span><span class="stat-label">value</span></div>
+  <div class="stat"><span class="stat-num">{{ totals.paid | money }}</span><span class="stat-label">paid</span></div>
+  <div class="stat"><span class="stat-num {{ 'gain' if totals.gain >= 0 else 'loss' }}">{{ "+" if totals.gain >= 0 }}{{ totals.gain | money }}</span><span class="stat-label">gain on {{ totals.gain_count }} with a price paid</span></div>
+</section>
+
+<p class="actions"><a class="button-outline" href="/report?{{ fq }}">Print report</a></p>
+
+<div class="stats-grid">
+  {{ bars("Genre", stats.by_genre) }}
+  {{ bars("Decade", stats.by_decade) }}
+  {{ bars("Format", stats.by_format) }}
+  {{ bars("Condition", stats.by_condition) }}
+  {{ bars("Top labels", stats.by_label) }}
+  {{ bars("Your ratings", stats.by_rating) }}
+</div>
+
+<section class="panel">
+  <h2>Most valuable</h2>
+  {% if stats.top_value %}
+  <table>
+    <tbody>
+      {% for a in stats.top_value %}
+      <tr><td><a href="/albums/{{ a.id }}">{{ a.artist }} &ndash; {{ a.title }}</a></td><td>{{ a.year or "" }}</td><td class="num">{{ a.value_cents | money }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}<p class="muted">No values yet.</p>{% endif %}
+</section>
+{% endblock %}

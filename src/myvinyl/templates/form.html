@@ -37,10 +37,15 @@
   {% endif %}
   {{ field("label", "Label", attrs='maxlength="200"') }}
   <div class="row">
+    <div>{{ field("purchase_price", "Price paid ($)", "text", 'inputmode="decimal" placeholder="0.00"') }}</div>
+    <div>{{ field("purchase_date", "Date bought", "date") }}</div>
+  </div>
+  {{ field("purchased_from", "Bought from", attrs='maxlength="200" placeholder="Shop, seller, or show"') }}
+  <div class="row">
     <div>{{ choice("format", "Format", formats) }}</div>
     <div>{{ choice("condition", "Condition", conditions) }}</div>
   </div>
-  <label for="notes">Notes</label>
+  <label for="notes">Notes (always shown at the top of the album's notes)</label>
   <textarea id="notes" name="notes" rows="3" maxlength="2000">{{ values.get("notes", "") }}</textarea>
   {% if errors.get("notes") %}<p class="error">{{ errors["notes"] }}</p>{% endif %}
   <div class="actions">
@@ -51,7 +56,7 @@
 {% if album_id %}
 <form class="narrow danger" method="post" action="/albums/{{ album_id }}/delete">
   <input type="hidden" name="csrf" value="{{ csrf }}">
-  <button class="link" type="submit">Delete this album</button>
+  <button class="link danger-link" type="submit">Move this album to the trash</button>
 </form>
 {% endif %}
 {% endblock %}

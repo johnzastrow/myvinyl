@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Collection report - myvinyl{% endblock %}
+{% block body_class %}report-page{% endblock %}
+{% block content %}
+<section class="report">
+  <p class="no-print notice">Use your browser's Print command (Ctrl+P or Cmd+P) to print this report or save it as a PDF. <a href="/?{{ fq }}">Back to the collection</a></p>
+  <div class="report-head">
+    <img src="/static/logo.svg" alt="" width="48" height="48">
+    <div>
+      <h1>{{ (viewing or me).username }}'s vinyl collection</h1>
+      <p>Generated {{ generated }}{% if f %} &middot; Filtered:
+        {% for k, v in f.items() %}{{ k | replace("_", " ") }} = {{ v }}{{ ", " if not loop.last }}{% endfor %}{% endif %}</p>
+    </div>
+  </div>
+
+  <table class="report-totals">
+    <tr><th>Albums</th><td>{{ totals.count }}</td>
+        <th>Total value</th><td>{{ totals.value | money }}</td>
+        <th>Range</th><td>{{ totals.low | money }} &ndash; {{ totals.high | money }}</td>
+        {% if totals.paid %}<th>Paid</th><td>{{ totals.paid | money }}</td>{% endif %}</tr>
+  </table>
+
+  <table class="report-table">
+    <thead>
+      <tr><th></th><th>Artist / Title</th><th>Year</th><th>Label</th><th>Format</th><th>Cond.</th><th>Rating</th><th class="num">Paid</th><th class="num">Value</th><th class="num">Range</th></tr>
+    </thead>
+    <tbody>
+      {% for a in albums %}
+      <tr>
+        <td class="thumb">{% if a.cover_file %}<img src="/covers/{{ a.id }}" alt="">{% endif %}</td>
+        <td><strong>{{ a.artist }}</strong><br>{{ a.title }}</td>
+        <td>{{ a.year or "" }}</td>
+        <td>{{ a.label }}</td>
+        <td>{{ a.format }}</td>
+        <td>{{ a.condition }}</td>
+        <td>{{ a.rating | stars }}</td>
+        <td class="num">{{ a.purchase_cents | money }}</td>
+        <td class="num">{{ a.value_cents | money }}</td>
+        <td class="num">{% if a.value_low_cents is not none %}{{ a.value_low_cents | money }}&ndash;{{ a.value_high_cents | money }}{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <p class="report-foot">Values are the lowest current asking prices on Discogs (USD) for the matched or chosen pressing, not appraisals.</p>
+</section>
+{% endblock %}

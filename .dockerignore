@@ -1,0 +1,16 @@
+# Keep secrets, local data, and tooling out of the image build context.
+.git
+.github
+.venv
+.env
+.env.*
+*.db
+*.db-*
+covers/
+backups/
+data/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+docs/
+tests/

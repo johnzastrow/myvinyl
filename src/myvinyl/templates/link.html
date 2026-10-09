@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}{{ "Create your account" if link and link.kind == "invite" else "Set a new password" }} - myvinyl{% endblock %}
+{% block content %}
+{% if invalid %}
+<section class="narrow panel login">
+  <h1>Link not valid</h1>
+  <p class="muted">This link has expired or has already been used. Ask the admin for a new one.</p>
+  <p class="actions"><a href="/login">Go to log in</a></p>
+</section>
+{% else %}
+<form class="narrow panel login" method="post" action="/link/{{ token }}">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  {% if link.kind == "invite" %}
+  <h1>Create your account</h1>
+  <p class="muted">You've been invited to myvinyl{{ " as an admin" if link.role == "admin" }}. Choose a username and password.</p>
+  <label for="username">Username</label>
+  <input id="username" name="username" value="{{ username or '' }}" autocomplete="username" maxlength="32" required autofocus>
+  {% if errors.username %}<p class="error">{{ errors.username }}</p>{% endif %}
+  {% else %}
+  <h1>Set a new password</h1>
+  <p class="muted">For account <strong>{{ target.username if target else "" }}</strong>.</p>
+  {% endif %}
+  <label for="password">New password (12+ characters)</label>
+  <input id="password" name="password" type="password" autocomplete="new-password" minlength="12" maxlength="256" required>
+  <label for="confirm">Repeat password</label>
+  <input id="confirm" name="confirm" type="password" autocomplete="new-password" minlength="12" maxlength="256" required>
+  {% if errors.password %}<p class="error">{{ errors.password }}</p>{% endif %}
+  <div class="actions"><button type="submit">{{ "Create account" if link.kind == "invite" else "Save password" }}</button></div>
+</form>
+{% endif %}
+{% endblock %}

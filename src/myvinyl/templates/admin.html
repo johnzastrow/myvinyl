@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+{% block title %}Admin - myvinyl{% endblock %}
+{% block content %}
+<h1>Admin</h1>
+
+{% if new_link %}
+<section class="panel">
+  <h2>{{ "Invite link" if new_link_kind == "invite" else "Password reset link for " ~ new_link_user }}</h2>
+  <p class="notice">Copy this link now and send it privately. It works once, expires in 7 days, and won't be shown again.</p>
+  <input class="link-box" value="{{ new_link }}" readonly aria-label="One-time link">
+</section>
+{% endif %}
+
+<section class="panel">
+  <h2>Users</h2>
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>User</th><th>Role</th><th class="num">Albums</th><th>Last login</th><th>Status</th><th></th></tr></thead>
+    <tbody>
+      {% for u in users %}
+      <tr>
+        <td><strong>{{ u.username }}</strong>{% if u.id == me.id %} <span class="muted">(you)</span>{% endif %}</td>
+        <td>
+          <form class="inline" method="post" action="/admin/users/{{ u.id }}/role">
+            <input type="hidden" name="csrf" value="{{ csrf }}">
+            <select name="role" aria-label="Role for {{ u.username }}">{% for r in roles %}<option {{ "selected" if r == u.role }}>{{ r }}</option>{% endfor %}</select>
+            <button class="button-small" type="submit">Set</button>
+          </form>
+        </td>
+        <td class="num">{{ u.album_count }}</td>
+        <td>{{ u.last_login_at | eastern if u.last_login_at else "never" }}</td>
+        <td>{{ "disabled" if u.disabled else "active" }}</td>
+        <td class="row-actions">
+          <form method="post" action="/admin/view/{{ u.id }}">
+            <input type="hidden" name="csrf" value="{{ csrf }}">
+            <button class="link" type="submit">View collection</button>
+          </form>
+          <form method="post" action="/admin/users/{{ u.id }}/reset">
+            <input type="hidden" name="csrf" value="{{ csrf }}">
+            <button class="link" type="submit">Reset password</button>
+          </form>
+          {% if u.id != me.id %}
+          <form method="post" action="/admin/users/{{ u.id }}/{{ 'enable' if u.disabled else 'disable' }}">
+            <input type="hidden" name="csrf" value="{{ csrf }}">
+            <button class="link {{ '' if u.disabled else 'danger-link' }}" type="submit">{{ "Enable" if u.disabled else "Disable" }}</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<div class="two-col">
+  <form class="panel" method="post" action="/admin/invite">
+    <h2>Invite someone</h2>
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <p class="muted">Creates a one-time link. The person chooses their own username and password and gets a private collection.</p>
+    <label for="role">Role</label>
+    <select id="role" name="role">{% for r in roles %}<option>{{ r }}</option>{% endfor %}</select>
+    <p class="hint">Admins can see and change every collection and manage users.</p>
+    <div class="actions"><button type="submit">Create invite link</button></div>
+  </form>
+
+  <section class="panel">
+    <h2>Open links</h2>
+    {% if links %}
+    <table>
+      <tbody>
+        {% for l in links %}
+        <tr>
+          <td>{{ "Invite (" ~ l.role ~ ")" if l.kind == "invite" else "Reset for " ~ l.target }}</td>
+          <td class="muted">expires {{ l.expires_at | eastern_date }}</td>
+          <td>
+            <form method="post" action="/admin/links/{{ l.id }}/revoke">
+              <input type="hidden" name="csrf" value="{{ csrf }}">
+              <button class="link danger-link" type="submit">Revoke</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}<p class="muted">No unused links.</p>{% endif %}
+  </section>
+</div>
+
+<div class="two-col">
+  <section class="panel" id="backups">
+    <h2>Backups</h2>
+    <p class="muted">{% if backup_hours %}Automatic every {{ backup_hours }} hours.{% else %}Automatic backups are off.{% endif %} Files are in the <code>backups</code> folder next to the database.</p>
+    {% if backups %}
+    <ul class="plain">{% for b in backups %}<li>{{ b.name }} <span class="muted">{{ (b.size / 1024) | round(1) }} KB</span></li>{% endfor %}</ul>
+    {% else %}<p class="muted">No backups yet.</p>{% endif %}
+    <form method="post" action="/admin/backup">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <button class="button-outline" type="submit">Back up now</button>
+    </form>
+  </section>
+  <section class="panel">
+    <h2>Server</h2>
+    <dl class="facts">
+      <dt>Discogs token</dt><dd>{{ "configured (60 requests/min)" if has_token else "not set (25 requests/min)" }}</dd>
+      <dt>Jobs waiting</dt><dd>{{ queued }}</dd>
+    </dl>
+  </section>
+</div>
+{% endblock %}

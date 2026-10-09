@@ -2,6 +2,61 @@
 
 All notable changes to myvinyl. Versions follow [semantic versioning](https://semver.org/).
 
+## 0.6.0 - 2026-10-09
+
+### Added
+- **Multiple users.** Each user has a private collection, wishlist, and stats. Admins can
+  view and change any collection ("View collection" with a banner), invite people with
+  one-time links (7-day expiry), create password-reset links, change roles, and disable
+  accounts. The last active admin is protected.
+- **Profiles and themes.** Display name, about text, Discogs username (pre-fills imports),
+  and a theme per user: Royal blue, Navy, Light, Gray, or Automatic.
+- **Trash (soft delete).** Deleted albums go to the trash with all their data; restore
+  them, delete them forever, or empty the trash. Trashed albums are purged after
+  `MYVINYL_TRASH_DAYS` (default 30).
+- **Purchases.** Price paid, date bought, and where, with gain or loss per album and in
+  the collection totals.
+- **Dated notes** per album, alongside the existing notes field.
+- **Wishlist.** Target price, current lowest Discogs price (re-checked weekly), "at or
+  below target" highlight, Discogs wantlist import, and "Got it" to move a record into the
+  collection with the price paid.
+- **Cover grid view** of the collection.
+- **Filters** by text, genre or style, decade, format, condition, minimum rating, and value
+  range. Totals, stats, CSV export, and reports follow the filters.
+- **Stats page** with breakdowns by genre, decade, format, condition, label, and rating,
+  plus the most valuable records.
+- **Printed reports** of any filtered view, with cover thumbnails and a black-on-white
+  print stylesheet.
+- **Saved covers.** The displayed cover is downloaded and served locally.
+- **Automatic backups** using SQLite's online backup API (`MYVINYL_BACKUP_HOURS`,
+  `MYVINYL_BACKUP_KEEP`), plus "Back up now" on the admin page.
+- **Deployment:** Dockerfile (non-root, read-only), `compose.yaml`, a Caddy site block for
+  `myvinyl.fluidgrid.site`, and `deploy/DEPLOY.md`.
+- `/healthz` endpoint for container health checks.
+- `SECURITY.md` with the full security review.
+
+### Changed
+- Login asks for a username. The first admin is created from `MYVINYL_PASSWORD_HASH`
+  (username `MYVINYL_ADMIN_USER`, default `admin`) and owns existing albums.
+- The Discogs token is one shared server setting; imports take a Discogs username, so
+  each user can import their own public collection or wantlist.
+- The database uses WAL mode so pages stay responsive while background jobs write.
+
+### Security
+- Password hashing and verification run off the event loop with limited concurrency
+  (a login flood could previously stall the whole site).
+- "Sign out everywhere" on the profile page.
+- Cover downloads refuse HTTP redirects.
+- One-time link tokens are redacted from the access log and stored only as hashes.
+- No `Server` header; `Permissions-Policy` header added.
+- Each account is capped at 20,000 albums so one user can't exhaust the shared Discogs
+  quota.
+
+### Upgrade notes
+- New tables (`users`, `invites`, `album_notes`, `wishlist`) and album columns are added
+  automatically. Keep `MYVINYL_PASSWORD_HASH` set for the first start after upgrading, so
+  the admin account can be created.
+
 ## 0.5.0 - 2026-10-09
 
 ### Added

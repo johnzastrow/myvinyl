@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+{% block title %}Wishlist - myvinyl{% endblock %}
+{% block head %}
+{% if status.state == "running" or wishes | selectattr("discogs_status", "equalto", "pending") | list %}<meta http-equiv="refresh" content="10">{% endif %}
+{% endblock %}
+{% block content %}
+<h1>Wishlist</h1>
+
+<section class="panel">
+  {% if wishes %}
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>Record</th><th class="num">Target</th><th class="num">Lowest now</th><th class="num">For sale</th><th>Got it</th><th></th></tr></thead>
+    <tbody>
+      {% for w in wishes %}
+      {% set deal = w.target_cents is not none and w.low_cents is not none and w.low_cents <= w.target_cents %}
+      <tr class="{{ 'deal' if deal }}">
+        <td class="wrap">
+          <strong>{{ w.artist }}</strong> &ndash; {{ w.title }}{% if w.year %} ({{ w.year }}){% endif %}
+          {% if deal %}<span class="chip chip-red">at or below target</span>{% endif %}
+          {% if w.notes %}<span class="track-note">{{ w.notes }}</span>{% endif %}
+          {% if w.discogs_release_id %}<a class="small" href="https://www.discogs.com/release/{{ w.discogs_release_id }}" target="_blank" rel="noopener noreferrer">Discogs</a>{% endif %}
+        </td>
+        <td class="num">{{ w.target_cents | money }}</td>
+        <td class="num">
+          {% if w.discogs_status == "pending" %}<span class="muted">checking&hellip;</span>
+          {% elif w.discogs_status == "none" %}<span class="muted">no match</span>
+          {% elif w.discogs_status == "error" %}<span class="muted">check failed</span>
+          {% else %}{{ w.low_cents | money }}{% endif %}
+        </td>
+        <td class="num">{{ w.num_for_sale if w.num_for_sale is not none else "" }}</td>
+        <td>
+          <form class="got-form" method="post" action="/wishlist/{{ w.id }}/got">
+            <input type="hidden" name="csrf" value="{{ csrf }}">
+            <select name="condition" aria-label="Condition">{% for c in conditions %}<option {{ "selected" if c == "VG+" }}>{{ c }}</option>{% endfor %}</select>
+            <input name="paid" placeholder="Paid $" inputmode="decimal" maxlength="12" aria-label="Price paid">
+            <button class="button-small" type="submit">Got it</button>
+          </form>
+        </td>
+        <td class="row-actions">
+          <form method="post" action="/wishlist/{{ w.id }}/refresh">
+            <input type="hidden" name="csrf" value="{{ csrf }}">
+            <button class="link" type="submit">Check price</button>
+          </form>
+          <form method="post" action="/wishlist/{{ w.id }}/delete">
+            <input type="hidden" name="csrf" value="{{ csrf }}">
+            <button class="link danger-link" type="submit">Remove</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  <p class="hint">Prices are re-checked about once a week. "Got it" moves the record into your collection with today's date and the price you paid.</p>
+  {% else %}
+  <p class="empty">Nothing on your wishlist yet.</p>
+  {% endif %}
+</section>
+
+<div class="two-col">
+  <form class="panel" method="post" action="/wishlist">
+    <h2>Add a record</h2>
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <label for="w-artist">Artist</label>
+    <input id="w-artist" name="artist" value="{{ values.artist or '' }}" maxlength="200" required>
+    {% if errors.artist %}<p class="error">{{ errors.artist }}</p>{% endif %}
+    <label for="w-title">Title</label>
+    <input id="w-title" name="title" value="{{ values.title or '' }}" maxlength="200" required>
+    {% if errors.title %}<p class="error">{{ errors.title }}</p>{% endif %}
+    <div class="row">
+      <div>
+        <label for="w-year">Year (optional)</label>
+        <input id="w-year" name="year" type="number" min="1900" max="2100" value="{{ values.year or '' }}">
+        {% if errors.year %}<p class="error">{{ errors.year }}</p>{% endif %}
+      </div>
+      <div>
+        <label for="w-target">Target price ($)</label>
+        <input id="w-target" name="target" inputmode="decimal" value="{{ values.target or '' }}" placeholder="0.00">
+        {% if errors.target %}<p class="error">{{ errors.target }}</p>{% endif %}
+      </div>
+    </div>
+    <label for="w-notes">Notes</label>
+    <input id="w-notes" name="notes" value="{{ values.notes or '' }}" maxlength="500">
+    {% if errors.notes %}<p class="error">{{ errors.notes }}</p>{% endif %}
+    <div class="actions"><button type="submit">Add to wishlist</button></div>
+  </form>
+
+  <form class="panel" method="post" action="/wishlist/import">
+    <h2>Import your Discogs wantlist</h2>
+    {% if status.state == "running" %}
+    <p class="notice">Importing: {{ status.added }} added, {{ status.skipped }} already here.</p>
+    {% elif status.state == "done" %}
+    <p class="notice">Imported {{ status.added }}; {{ status.skipped }} were already on your wishlist.</p>
+    {% elif status.state == "error" %}
+    <p class="notice">Import stopped: {{ status.message }}</p>
+    {% endif %}
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <label for="wl-user">Discogs username</label>
+    <input id="wl-user" name="username" value="{{ (viewing or me).discogs_username }}" maxlength="100" required>
+    <p class="hint">Your wantlist must be public on Discogs. Records already on your wishlist are skipped.</p>
+    <div class="actions"><button type="submit" {{ "disabled" if status.state == "running" }}>Import wantlist</button></div>
+  </form>
+</div>
+{% endblock %}

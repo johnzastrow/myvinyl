@@ -1,63 +1,38 @@
 # TODO
 
-Backlog for myvinyl, in rough priority order. Items marked **(decision)** need an answer
-before work starts.
+Backlog for myvinyl. Items marked **(decision)** need an answer before work starts.
 
 ## Next up
 
-### Multi-user
-Do this before the per-user features below, since every table needs an owner.
+### Deployment (needs you, on the server)
+- [ ] DNS record for `myvinyl.fluidgrid.site` (CNAME to `recipe.fluidgrid.site` or an A
+      record).
+- [ ] Follow `deploy/DEPLOY.md`: clone, create `.env`, `docker compose up -d --build`,
+      add the Caddy site block, reload Caddy.
+- [ ] Build and test the Docker image (Docker wasn't available on the development
+      machine, so the image hasn't been built yet).
+- [ ] Set up off-server copies of `/data/backups`.
+- [ ] Optional: pin the Docker base images by digest.
 
-Decided 2026-10-09:
-- Each user has a private collection. **Admins can do anything to any collection.**
-- Accounts are created by **admin invite links** (one-time, expire after 7 days); the
-  invitee sets their own password. No open sign-up.
-
-- [ ] Users table, per-user Argon2id passwords, per-user login rate limits.
-- [ ] Scope albums, ratings, notes, wishlist, and history to their owner; authorization
-      checks on every route.
-- [ ] Admin page: invite or create users, reset passwords, disable accounts.
-- [ ] Move the current single-password login to the first admin account.
-- [ ] Per-user Discogs token for imports (stored encrypted), or a shared server token.
-
-### Collection data
-- [ ] Purchase tracking: price paid, date, where bought. Gain or loss per album and for
-      the whole collection.
-- [ ] Ad hoc dated notes per album (a journal of entries), alongside the existing notes field.
-- [ ] Wishlist: records you want, with current lowest Discogs price, target price,
-      "Got it" to move to the collection, and import of your Discogs wantlist.
-
-### Browsing and reports
-- [ ] Cover grid view of the collection.
-- [ ] Filters: genre, style, decade, format, condition, rating, price range. Store Discogs
-      genres and styles on each album so filtering is fast.
-- [ ] Stats page: counts and value by genre, decade, format, condition; top labels;
-      most valuable records; rating distribution; purchase cost against current value.
-- [ ] Printed reports from any filtered view: print stylesheet plus a printable report
-      page (cover thumbnails, values, totals), suitable for insurance.
-
-### Reliability
-- [ ] Save chosen covers locally (only from `i.discogs.com`, type and size checked) and
-      serve them from myvinyl.
-- [ ] Automatic backups: daily SQLite backup with the online backup API, keep the last N.
-
-### Deployment
-- [ ] Dockerfile (non-root user, `/data` volume for database, covers, backups).
-- [ ] docker-compose.yml.
-- [ ] Caddy site `myvinyl.fluidgrid.site` on the server that already serves
-      `recipe.fluidgrid.site`. Caddy runs **on the host** (decided 2026-10-09), so the
-      container publishes `127.0.0.1:8000` only and Caddy proxies to it.
-- [ ] DNS record for `myvinyl.fluidgrid.site`.
+### Security follow-ups (see SECURITY.md)
+- [ ] (decision) Second factor (TOTP), or put the site behind Caddy forward-auth or a VPN.
+- [ ] Re-run the security review after major changes; run `pip-audit` on dependency bumps.
 
 ## Ideas, not scheduled
 - Condition-based price suggestions from Discogs (token, possibly seller settings).
 - Separate sleeve grade (Goldmine grades record and sleeve separately).
-- Insurance report as PDF.
+- Report as a downloadable PDF (today: browser Print to PDF).
 - CSV import.
 - Shelf location and duplicate copies.
-- Pagination for large collections.
+- Pagination for very large collections.
+- Read-only sharing of a collection with people who have no account.
+- Collection-wide value history chart.
 
 ## Done
+- 0.6.0: multiple users with admin, invite links, and profiles; five themes; trash with
+  restore; purchase tracking and gain/loss; dated notes; wishlist with wantlist import;
+  cover grid; filters; stats; printed reports; saved covers; automatic backups; Docker and
+  Caddy deployment files; full security review with fixes.
 - Repository published: https://github.com/johnzastrow/myvinyl (public).
 - 0.5.0: pick your pressing, barcode/catalog-number add, Discogs import, value history
   with weekly refresh, album and track ratings and reviews.

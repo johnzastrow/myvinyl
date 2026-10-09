@@ -28,7 +28,7 @@
             <input type="hidden" name="{{ key }}" value="{{ form.get(key) if (form.get(key) or '') | trim else (m[key] or '') }}">
             {% endfor %}
             <input type="hidden" name="format" value="{{ m.format }}">
-            {% for key in ["condition", "notes", "value"] %}
+            {% for key in ["condition", "notes", "value", "purchase_price", "purchase_date", "purchased_from"] %}
             <input type="hidden" name="{{ key }}" value="{{ form.get(key, '') }}">
             {% endfor %}
             <button type="submit">This one</button>

@@ -1,28 +1,50 @@
 {% extends "base.html" %}
 {% macro sort_link(key, label) -%}
   {%- set next_dir = "desc" if sort == key and direction == "asc" else "asc" -%}
-  <a href="/?q={{ q | urlencode }}&amp;sort={{ key }}&amp;dir={{ next_dir }}">{{ label }}
+  <a href="/?{{ fq }}{{ '&' if fq }}sort={{ key }}&amp;dir={{ next_dir }}&amp;view={{ view }}">{{ label }}
   {%- if sort == key %} {{ "▲" if direction == "asc" else "▼" }}{% endif %}</a>
 {%- endmacro %}
 {% block content %}
 <section class="stats">
-  <div class="stat"><span class="stat-num">{{ totals.count }}</span><span class="stat-label">album{{ "" if totals.count == 1 else "s" }}</span></div>
-  <div class="stat"><span class="stat-num">{{ totals.value | money }}</span><span class="stat-label">collection value</span></div>
+  <div class="stat"><span class="stat-num">{{ totals.count }}</span><span class="stat-label">album{{ "" if totals.count == 1 else "s" }}{{ " (filtered)" if f }}</span></div>
+  <div class="stat"><span class="stat-num">{{ totals.value | money }}</span><span class="stat-label">value</span></div>
   <div class="stat"><span class="stat-num">{{ totals.low | money }} &ndash; {{ totals.high | money }}</span><span class="stat-label">range across pressings</span></div>
+  {% if totals.paid %}
+  <div class="stat"><span class="stat-num">{{ totals.paid | money }}</span><span class="stat-label">paid &middot; <span class="{{ 'gain' if totals.gain >= 0 else 'loss' }}">{{ "+" if totals.gain >= 0 }}{{ totals.gain | money }}</span> on {{ totals.gain_count }}</span></div>
+  {% endif %}
 </section>
 
 <div class="toolbar">
-  <form method="get" action="/" class="search">
-    <input type="hidden" name="sort" value="{{ sort }}">
-    <input type="hidden" name="dir" value="{{ direction }}">
-    <input type="search" name="q" value="{{ q }}" placeholder="Search artist, title, label" maxlength="200" aria-label="Search">
-  </form>
   <a class="button" href="/albums/new">Add album</a>
   <a class="button-outline" href="/import">Import</a>
+  <span class="spacer"></span>
+  <a class="toggle {{ 'on' if view == 'list' }}" href="/?{{ fq }}{{ '&' if fq }}sort={{ sort }}&amp;dir={{ direction }}&amp;view=list">List</a>
+  <a class="toggle {{ 'on' if view == 'grid' }}" href="/?{{ fq }}{{ '&' if fq }}sort={{ sort }}&amp;dir={{ direction }}&amp;view=grid">Covers</a>
+  <a class="button-outline" href="/report?{{ fq }}{{ '&' if fq }}sort={{ sort }}&amp;dir={{ direction }}">Print report</a>
 </div>
+
+{% with action="/" %}{% include "_filters.html" %}{% endwith %}
+
 {% if queued %}<p class="hint">{{ queued }} album{{ "" if queued == 1 else "s" }} waiting for Discogs lookups.</p>{% endif %}
 
-{% if albums %}
+{% if albums and view == "grid" %}
+<div class="cover-grid">
+  {% for a in albums %}
+  <a class="tile" href="/albums/{{ a.id }}">
+    {% if a.cover_file %}
+    <img src="/covers/{{ a.id }}" alt="" loading="lazy">
+    {% else %}
+    <span class="tile-blank" aria-hidden="true"><span></span></span>
+    {% endif %}
+    <span class="tile-text">
+      <strong>{{ a.title }}</strong>
+      <span>{{ a.artist }}</span>
+      <span class="tile-meta">{{ a.value_cents | money }}{% if a.rating is not none %} &middot; {{ a.rating | stars }}{% endif %}</span>
+    </span>
+  </a>
+  {% endfor %}
+</div>
+{% elif albums %}
 <div class="table-wrap">
 <table>
   <thead>
@@ -34,6 +56,7 @@
       <th>{{ sort_link("format", "Format") }}</th>
       <th>{{ sort_link("condition", "Cond.") }}</th>
       <th>{{ sort_link("rating", "Rating") }}</th>
+      <th class="num">{{ sort_link("paid", "Paid") }}</th>
       <th class="num">{{ sort_link("value", "Value") }}</th>
     </tr>
   </thead>
@@ -47,6 +70,7 @@
       <td>{{ a.format }}</td>
       <td><span class="chip chip-red">{{ a.condition }}</span></td>
       <td class="stars-cell">{{ a.rating | stars }}</td>
+      <td class="num">{{ a.purchase_cents | money }}</td>
       <td class="num">
         {% if a.discogs_status == "pending" %}<span class="muted">looking up&hellip;</span>
         {% else %}{{ a.value_cents | money }}
@@ -58,10 +82,13 @@
   </tbody>
 </table>
 </div>
-<p class="muted"><a href="/export.csv">Export CSV</a></p>
-{% elif q %}
-<p class="empty">No albums match "{{ q }}".</p>
+{% endif %}
+
+{% if albums %}
+<p class="muted"><a href="/export.csv?{{ fq }}">Export CSV</a>{{ " (filtered)" if f }} &middot; <a href="/stats?{{ fq }}">Stats for this view</a></p>
+{% elif f %}
+<p class="empty">No albums match these filters.</p>
 {% else %}
-<p class="empty">No albums yet. Add your first record.</p>
+<p class="empty">No albums yet. Add your first record, or import your Discogs collection.</p>
 {% endif %}
 {% endblock %}

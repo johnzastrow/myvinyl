@@ -1,0 +1,20 @@
+# Add this site block to the host's Caddyfile (usually /etc/caddy/Caddyfile), next to the
+# existing recipe.fluidgrid.site block, then: sudo systemctl reload caddy
+# Caddy gets and renews the HTTPS certificate automatically once DNS points here.
+
+myvinyl.fluidgrid.site {
+	encode zstd gzip
+
+	# Forms are small; nothing in myvinyl uploads files.
+	request_body {
+		max_size 1MB
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		-Server
+	}
+
+	# The container publishes 127.0.0.1:8085 only (see compose.yaml).
+	reverse_proxy 127.0.0.1:8085
+}

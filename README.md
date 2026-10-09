@@ -5,8 +5,8 @@
 <h1 align="center">myvinyl</h1>
 
 <p align="center">
-  A self-hosted inventory for your vinyl record collection, with automatic street values,
-  price ranges, and release details from Discogs.
+  A self-hosted, multi-user inventory for vinyl record collections, with automatic street
+  values, price ranges and history, release details, and album art from Discogs.
 </p>
 
 ![Collection page](docs/screenshots/collection.png)
@@ -20,6 +20,7 @@
 - [Quick start](#quick-start)
 - [Configuration](#configuration)
 - [Getting a Discogs token](#getting-a-discogs-token)
+- [Accounts and admins](#accounts-and-admins)
 - [How valuation works](#how-valuation-works)
 - [Using the app](#using-the-app)
 - [Security](#security)
@@ -35,91 +36,116 @@
 
 ### Collection
 - **Albums:** artist, title, year, label, format (LP, 2xLP, EP, 7", 10", 12" single,
-  box set), condition on the Goldmine scale (M, NM, VG+, VG, G+, G, F, P), notes, and
-  street value.
-- **Search** by artist, title, or label, and **sort** by any column. Condition sorts by
-  grade, not alphabetically.
-- **Totals** at the top of the page: album count, collection value, and the collection's
-  total low-to-high range.
-- **CSV export** of every album with value, range, value source, and Discogs release ID.
-  Cells are protected against spreadsheet formula injection.
+  box set), condition on the Goldmine scale (M through P), street value, purchase price,
+  date and place bought, and notes.
+- **Add by barcode or catalog number** for an exact Discogs match. If several pressings
+  share a barcode (for example black and colored vinyl), you choose one.
+- **Import your Discogs collection** (and Discogs star ratings) in one step.
+- **List or cover-grid view**, sortable by any column.
+- **Filters:** search text, genre or style, decade, format, condition, minimum rating, and
+  value range. Totals, stats, CSV export, and printed reports all follow the filters.
+- **Totals:** album count, value, range across pressings, amount paid, and gain or loss.
+- **Dated notes:** a journal per album for cleanings, plays, provenance, or anything else.
+- **Trash:** deleted albums can be restored for 30 days, then they are removed for good.
 
 ### Discogs integration
-- **Automatic value lookup.** Leave the value blank when you add an album and myvinyl fills
-  it in from the Discogs marketplace.
-- **Value range across pressings.** Up to 10 matching vinyl pressings are priced, and the
-  low, median, and high asking prices are recorded along with each pressing's price and
-  number of copies for sale.
-- **Release details.** The full Discogs release record is stored: release date, country,
-  label and catalog number, format details, genres, styles, barcode, matrix/runout
-  identifiers, tracklist, credits, community have/want counts and rating, and release notes.
-- **Fills in what you left blank.** An empty label or year is filled from Discogs. Anything
+- **Automatic value lookup:** leave the value blank and myvinyl fills it in from the
+  Discogs marketplace.
+- **Pick your pressing:** a **Mine** button on the album's pressing list pins your exact
+  copy; the value, details, and art follow it from then on.
+- **Value range across pressings:** up to 10 matching pressings are priced, with the low,
+  median, and high recorded.
+- **Value history:** every lookup is recorded and charted. Prices are re-checked about
+  once a week, automatically.
+- **Release details:** release date, country, label and catalog number, format details,
+  genres, styles, barcodes, matrix/runout identifiers, tracklist, credits, community
+  have/want counts and rating, and release notes.
+- **Album art:** every image on the release is kept; choose the one to display. The chosen
+  cover is saved locally so it keeps working even if Discogs changes its links.
+- **Fills in what you left blank:** an empty label or year comes from Discogs; anything
   you typed is never overwritten.
-- **Album art chooser.** Every image on the release (front, back, labels, inserts) is kept,
-  and you pick which one to display.
-- **Background lookups.** Saving is instant; the album page shows progress and refreshes
-  itself until the lookup is done. Requests are throttled to stay within Discogs' rate limits.
-- **Pick your pressing.** Click **Mine** on the right row of the pressings table and the
-  value, details, and art follow your copy from then on.
-- **Add by barcode or catalog number** for an exact match; if several pressings share a
-  barcode, you choose one.
-- **Import your Discogs collection** (token required), including your Discogs ratings.
-- **Value history.** Prices are re-checked about once a week, and the album page charts
-  value and range over time.
-- **Optional token** for a faster API rate limit.
 
 ### Ratings and reviews
 - Rate albums from half a star to 5 stars and write a review.
 - Rate each track and add a short note.
-- Sort the collection by rating.
 
-### Look and feel
-- Buffalo Bills colors: royal blue pages (navy in dark mode), a navy header with a
-  red-white-red stripe, red and white buttons, and white inputs.
-- Server-rendered pages with **no JavaScript**. Works on phones, with tables that scroll
-  horizontally.
-- Times shown in US Eastern time (EST/EDT).
+### Wishlist
+- Track records you want, with a target price and the current lowest Discogs price.
+  Records at or below your target are highlighted.
+- Import your Discogs wantlist.
+- **Got it** moves a record into your collection with the date and price you paid.
+
+### Stats and reports
+- **Stats page:** counts and value by genre, decade, format, condition, label, and your
+  ratings, plus the most valuable records.
+- **Printed reports** of any filtered view, with cover thumbnails and totals. Print or
+  save as PDF from the browser; the print layout is black on white.
+- **CSV export** of any filtered view.
+
+### People
+- **Multiple users,** each with a private collection, wishlist, and stats.
+- **Admins** can view and change any collection, invite people, reset passwords, and
+  disable accounts.
+- **Invite links:** one-time, expire after 7 days; there is no open sign-up.
+- **Profiles:** display name, about text, Discogs username (pre-fills imports), and theme.
+
+### Themes
+Five themes in Buffalo Bills colors, chosen per user: **Royal blue**, **Navy**,
+**Light** (mostly white), **Gray** (light gray), and **Automatic** (royal by day, navy
+when the system is in dark mode).
+
+### Operations
+- Daily automatic backups (14 kept), plus **Back up now** on the admin page.
+- Docker image and compose file for deploying behind Caddy.
+- No JavaScript: server-rendered pages under a strict Content Security Policy.
+- Times shown in US Eastern time.
 
 ---
 
 ## Screenshots
 
-| Collection (light) | Collection (dark mode) |
+| Collection (Royal) | Cover grid |
 |---|---|
-| ![Collection page in light mode](docs/screenshots/collection.png) | ![Collection page in dark mode](docs/screenshots/collection-dark.png) |
+| ![Collection](docs/screenshots/collection.png) | ![Cover grid](docs/screenshots/grid.png) |
 
-**Album page:** value, range across pressings, community stats, album art chooser, Discogs
-details, pressings checked, tracklist, credits, and release notes.
+| Light theme | Gray theme | Navy theme |
+|---|---|---|
+| ![Light](docs/screenshots/theme-light.png) | ![Gray](docs/screenshots/theme-gray.png) | ![Navy](docs/screenshots/theme-navy.png) |
+
+**Album page:** street value, range across pressings, community stats, purchase and gain,
+value history chart, rating and review, album art chooser, dated notes, Discogs details,
+pressings with **Mine** buttons, tracklist with your track ratings, credits, and notes.
 
 ![Album page](docs/screenshots/album.png)
 
-| Edit album | Log in | Phone |
-|---|---|---|
-| ![Edit form](docs/screenshots/edit.png) | ![Login page](docs/screenshots/login.png) | ![Phone layout](docs/screenshots/mobile.png) |
+| Stats | Printed report |
+|---|---|
+| ![Stats](docs/screenshots/stats.png) | ![Report](docs/screenshots/report.png) |
 
-A dark-mode album page is in [docs/screenshots/album-dark.png](docs/screenshots/album-dark.png).
+| Wishlist | Admin |
+|---|---|
+| ![Wishlist](docs/screenshots/wishlist.png) | ![Admin](docs/screenshots/admin.png) |
+
+| Add album | Profile and themes | Log in | Phone |
+|---|---|---|---|
+| ![Add](docs/screenshots/add.png) | ![Profile](docs/screenshots/profile.png) | ![Login](docs/screenshots/login.png) | ![Phone](docs/screenshots/mobile.png) |
 
 ---
 
 ## Quick start
 
-Requirements: Python 3.12 or newer and [uv](https://docs.astral.sh/uv/).
+Requirements: Python 3.12 or newer and [uv](https://docs.astral.sh/uv/). To run it on a
+server, see [Deploying online](#deploying-online).
 
 ```powershell
 git clone https://github.com/johnzastrow/myvinyl.git
 cd myvinyl
 uv sync
+uv run python -m myvinyl.credentials   # prompts for the admin password; prints two values
 ```
 
-**1. Create your login.** This prompts for a password (12+ characters, not echoed) and
-prints the two values to set:
-
-```powershell
-uv run python -m myvinyl.credentials
-```
-
-**2. Set the values and start the server.** In PowerShell, use single quotes: the
-password hash contains `$` characters.
+Set the printed values and start the server. In PowerShell, use single quotes, because
+the password hash contains `$` characters:
 
 ```powershell
 $env:MYVINYL_SECRET_KEY    = '<printed value>'
@@ -128,100 +154,104 @@ $env:MYVINYL_DISCOGS_TOKEN = '<your token>'    # optional, see below
 uv run myvinyl
 ```
 
-On macOS or Linux:
-
-```bash
-export MYVINYL_SECRET_KEY='<printed value>'
-export MYVINYL_PASSWORD_HASH='<printed value>'
-export MYVINYL_DISCOGS_TOKEN='<your token>'    # optional
-uv run myvinyl
-```
-
-**3. Open** <http://127.0.0.1:8000> and log in.
-
-`uv run myvinyl --host 0.0.0.0 --port 9000` changes the address. Read
-[Deploying online](#deploying-online) before listening on anything other than localhost.
+On macOS or Linux, use `export NAME='value'` instead. Open <http://127.0.0.1:8000> and
+log in as **admin** with the password you chose.
 
 ---
 
 ## Configuration
 
-All settings are environment variables. The app **refuses to start** if a required value
-is missing or malformed, rather than running with weak defaults.
+All settings are environment variables. The app **refuses to start** if a value is
+malformed, rather than running with weak defaults.
 
-| Variable | Required | Purpose |
+| Variable | Default | Purpose |
 |---|---|---|
-| `MYVINYL_SECRET_KEY` | Yes | Signs the session cookie. 32+ characters; `myvinyl.credentials` generates one. |
-| `MYVINYL_PASSWORD_HASH` | Yes | Argon2id hash of your login password, from `myvinyl.credentials`. |
-| `MYVINYL_DISCOGS_TOKEN` | No | Discogs personal access token. Raises the API limit from 25 to 60 requests per minute. |
-| `MYVINYL_DB` | No | Path to the SQLite database file. Default: `myvinyl.db` in the current directory. |
-| `MYVINYL_REFRESH_DAYS` | No | Re-check prices of albums older than this many days. Default `7`; `0` turns automatic refresh off. |
+| `MYVINYL_SECRET_KEY` | *(required)* | Signs session cookies. 32+ characters; `myvinyl.credentials` generates one. |
+| `MYVINYL_PASSWORD_HASH` | *(first run)* | Argon2id hash for the first admin. Only used when the database has no accounts yet. |
+| `MYVINYL_ADMIN_USER` | `admin` | Username for that first admin. |
+| `MYVINYL_DISCOGS_TOKEN` | *(none)* | Shared Discogs personal token for the whole server: 60 requests/min instead of 25. |
+| `MYVINYL_DB` | `myvinyl.db` | SQLite database path. Covers and backups are stored next to it. |
+| `MYVINYL_BASE_URL` | *(from request)* | Public address for invite links, e.g. `https://myvinyl.fluidgrid.site`. |
+| `MYVINYL_REFRESH_DAYS` | `7` | Re-check prices older than this many days (`0` = off). |
+| `MYVINYL_BACKUP_HOURS` | `24` | Hours between automatic backups (`0` = off). |
+| `MYVINYL_BACKUP_KEEP` | `14` | Number of backups kept. |
+| `MYVINYL_TRASH_DAYS` | `30` | Days before trashed albums are deleted for good (`0` = never). |
 
-Keep these out of version control. `.gitignore` already excludes `.env` files and
-databases. A password manager or secret manager is a better home for them than a
-plain-text file.
+Keep secrets out of version control: `.gitignore` excludes `.env` files, databases, covers,
+and backups.
 
 ---
 
 ## Getting a Discogs token
 
 myvinyl works without a token. With one, the Discogs API allows 60 requests per minute
-instead of 25, so lookups finish about twice as fast: about 12 seconds per album instead
-of about 30.
+instead of 25, so lookups finish about twice as fast: about 12 seconds per album instead of
+about 30. **One token serves the whole server.** Users don't need their own.
 
-1. **Create a free Discogs account** at <https://www.discogs.com/users/create>, or log in
-   if you already have one.
-2. **Open the developer settings:** click your avatar (top right), choose **Settings**, then
-   **Developers**. The direct link is <https://www.discogs.com/settings/developers>.
-3. **Click "Generate new token."** Discogs shows a personal access token: a long string of
-   letters and numbers.
-4. **Copy the token** and set it as `MYVINYL_DISCOGS_TOKEN` (see
-   [Quick start](#quick-start)), then restart myvinyl.
+1. **Create a free Discogs account** at <https://www.discogs.com/users/create>, or log in.
+2. **Open the developer settings:** avatar (top right) → **Settings** → **Developers**,
+   or go directly to <https://www.discogs.com/settings/developers>.
+3. **Click "Generate new token"** and copy the long string of letters and numbers.
+4. **Set it as `MYVINYL_DISCOGS_TOKEN`** and restart myvinyl. The admin page shows whether
+   a token is configured.
 
 Notes:
 
 - **Treat the token like a password.** It is tied to your Discogs account. myvinyl only
   sends it to `api.discogs.com` in the `Authorization` header, and never logs or displays it.
-- **To revoke it**, return to the same Developers page and generate a new token. That
-  invalidates the old one.
-- **myvinyl only reads public data** (search, marketplace statistics, and release records),
-  so you don't need to set up a seller account or OAuth.
+- **To revoke it,** generate a new token on the same page; that invalidates the old one.
+- **Importing someone's collection or wantlist** needs only their Discogs username, as long
+  as their collection is public (Discogs → Settings → Privacy). The token owner's own
+  collection works even when private.
 - Use of the API is governed by the
-  [Discogs API Terms of Use](https://support.discogs.com/hc/en-us/articles/360009334593-API-Terms-of-Use).
-  See also the [Discogs API documentation](https://www.discogs.com/developers).
+  [Discogs API Terms of Use](https://support.discogs.com/hc/en-us/articles/360009334593-API-Terms-of-Use);
+  see also the [Discogs API documentation](https://www.discogs.com/developers).
+
+---
+
+## Accounts and admins
+
+- On first start, myvinyl creates the admin account from `MYVINYL_PASSWORD_HASH`. Albums
+  from a pre-multi-user database are given to that admin.
+- **Invite someone:** Admin → choose a role → **Create invite link** → send the link
+  privately. It works once and expires after 7 days. The person picks their own username
+  and password (12+ characters).
+- **Roles:** *member* (their own collection) and *admin* (everything: all collections,
+  users, invites, backups). The last active admin can't be disabled or demoted.
+- **Viewing another collection:** Admin → **View collection**. A red banner shows whose
+  collection you're in. Anything you add or import goes into that collection. Click
+  **Back to mine** to leave.
+- **Forgotten password:** an admin clicks **Reset password** to create a one-time reset
+  link. Using it signs the user out everywhere.
+- **Disable** blocks sign-in and ends the user's sessions immediately; their data is kept.
+- **Profile:** display name, about text, Discogs username, theme, password change, and
+  **Sign out everywhere**.
 
 ---
 
 ## How valuation works
 
-When you save an album, myvinyl runs a lookup in the background:
-
-1. **Search.** It queries Discogs for vinyl releases using the artist and title as separate
-   fields. Free-text search can return unrelated records, so it isn't used. Results whose
-   title doesn't contain your album title are discarded.
-2. **Rank.** Official pressings come before unofficial ones, then pressings from the year
-   closest to the one you entered. Ties keep Discogs' relevance order.
-3. **Price.** It fetches the marketplace statistics for the top 10 pressings: the lowest
+1. **Search.** Discogs is queried for vinyl releases with the artist and title as separate
+   fields (free-text search returns unrelated records). Results whose title doesn't contain
+   your album title are dropped.
+2. **Rank.** Official pressings come before unofficial ones, then pressings closest to the
+   year you entered.
+3. **Price.** The marketplace statistics for the top 10 pressings give each one's lowest
    current asking price (USD) and the number of copies for sale.
-4. **Choose.** The top-ranked pressing is the **best match**. Its full release record and
-   images are saved.
-5. **Record.**
+4. **Choose.** The pressing you picked with **Mine**, a barcode, or an import, or else the
+   top-ranked one, is the match. Its full release record and images are saved, and the
+   displayed cover is downloaded.
+5. **Record:**
 
 | Stored | Meaning |
 |---|---|
-| **Value** | The best match's lowest asking price. If that pressing has none for sale, the median of the range is used. A value you typed yourself is never replaced. |
-| **Range** | The lowest and highest asking prices across the pressings checked, plus the median. |
-| **Pressings** | Every pressing checked, with year, country, label, catalog number, format, copies for sale, and price. |
+| **Value** | The matched pressing's lowest asking price, or the range median if it has none for sale. A value you typed is never replaced. |
+| **Range** | Low, median, and high asking prices across the pressings checked. |
+| **History** | One point per lookup, charted on the album page. |
+| **Pressings** | Each pressing checked, with year, country, label, catalog number, format, copies for sale, and price. |
 
-**Things to know**
-
-- The match is **automatic** and can be a different pressing than the one you own. The
-  album page marks the best match and links each pressing to Discogs so you can check.
-- An **asking price** is what sellers want today, for a copy in any condition. It isn't
-  a sale price or an appraisal, and it isn't adjusted for your copy's grade.
-- A lookup makes about 12 API calls. Without a token that takes about 30 seconds; extra
-  lookups queue behind it.
-- Click **Refresh from Discogs** on any album to rerun its lookup with current prices.
+An **asking price** is what sellers want today, for a copy in any condition. It isn't a
+sale price or an appraisal.
 
 ---
 
@@ -229,80 +259,61 @@ When you save an album, myvinyl runs a lookup in the background:
 
 | Task | How |
 |---|---|
-| Add an album | **Add album**, fill in artist, title, format, and condition. Leave value blank to have it looked up. |
-| See details | Click the artist or title in the collection. |
-| Override the value | **Edit**, type a value, **Save**. Refreshes keep your value. |
-| Go back to the Discogs value | **Edit**, clear the value, **Save**, then **Refresh from Discogs**. |
-| Change the displayed cover | On the album page, click a different image under **Album art**. |
-| Fix the pressing | On the album page, click **Mine** on your row of **Pressings checked**. |
-| Add by barcode | Type the barcode or catalog number at the top of **Add album**; artist and title can stay blank. |
-| Import from Discogs | **Import** next to **Add album**, choose a default condition, **Import my collection**. |
-| Rate and review | **Your rating and review** on the album page; **Rate tracks** above the tracklist. |
-| Re-check prices | **Refresh from Discogs** on the album page. |
-| Export | **Export CSV** under the collection table. |
-| Delete | **Edit**, then **Delete this album**. |
-
-**Lookup status messages** on the album page:
-
-- **Looking up**: in progress; the page refreshes every 5 seconds.
-- **No matching vinyl release**: check the spelling of the artist and title, then refresh.
-- **Did not finish**: a network error, a rate limit, or a server restart cut it off. Refresh to retry.
+| Add an album | **Add album**. Type a barcode or catalog number for an exact match, or enter artist and title. Leave value blank to have it looked up. |
+| Import from Discogs | **Import** → your Discogs username → default condition → **Import collection**. |
+| Fix the pressing | Album page → **Mine** on your row of **Pressings checked**. |
+| Record what you paid | **Edit** → price paid, date bought, bought from. |
+| Add a dated note | Album page → **Notes** → **Add note**. |
+| Rate and review | Album page → **Your rating and review**; **Rate tracks** above the tracklist. |
+| Change the cover | Album page → click an image under **Album art**. |
+| Filter | Use the filter bar on the collection or stats page; **Clear** resets it. |
+| Print a report | **Print report** (follows the current filters) → your browser's Print (Ctrl+P). |
+| Wishlist | **Wishlist** → add records or import your Discogs wantlist → **Got it** when you buy one. |
+| Delete / restore | **Edit** → **Move this album to the trash**; **Trash** → **Restore** or **Delete forever**. |
+| Change theme | Click your name (top right) → **Theme** → **Save profile**. |
 
 ---
 
 ## Security
 
-myvinyl is a single-user app, but it is built to be safe on the internet.
+myvinyl is built to run on the public internet. The full review, with findings and
+residual risks, is in **[SECURITY.md](SECURITY.md)**. Highlights:
 
 | Area | Protection |
 |---|---|
-| Login | One password, stored only as an **Argon2id** hash. 5 failed attempts within 15 minutes from one IP blocks further attempts from it. |
-| Sessions | Signed cookie, `HttpOnly`, `Secure`, `SameSite=Lax`, 12-hour lifetime. Logging in starts a fresh session. |
-| CSRF | Every form that changes data carries a per-session token, compared in constant time. |
-| Database | All SQL is parameterized. Sorting uses a fixed allowlist of columns. Search treats `%` and `_` as plain characters. |
-| Output | Jinja2 auto-escaping on all pages, including text that comes from Discogs. |
-| Headers | Strict Content Security Policy (no scripts at all; images only from this site and `i.discogs.com`), `X-Frame-Options: DENY`, `nosniff`, `no-store`. |
-| Discogs | Requests only go to `api.discogs.com` over HTTPS, with timeouts and a response size cap. Every response is type-checked. Only images on `i.discogs.com` are displayed, and a cover can only be one of the release's own images. |
-| Input | Length limits, a year between 1900 and next year, allowed formats and conditions only, values between 0 and 1,000,000 with up to two decimal places. Invalid input is rejected, not quietly fixed. |
-| Secrets | Required settings fail closed. Secrets are kept out of logs and error output. |
-| CSV | Cells starting with `=`, `+`, `-`, or `@` are prefixed so spreadsheets don't execute them. |
+| Passwords | Argon2id, 12+ characters, hashed off the request thread with limited concurrency. |
+| Login | Per-IP and per-username rate limits; the same error for wrong user or password; no timing difference. |
+| Sessions | Signed `HttpOnly`, `Secure`, `SameSite=Lax` cookies, 12-hour lifetime, revoked on password change, reset, disable, or **Sign out everywhere**. |
+| Authorization | Owner-or-admin check on every record; others get 404. |
+| Invites and resets | 256-bit one-time tokens, stored only as SHA-256 hashes, expire in 7 days, redacted from logs. |
+| CSRF | Per-session token on every form that changes data. |
+| Injection and XSS | Parameterized SQL with allowlisted sort and filter clauses; auto-escaped templates; CSP with no scripts. |
+| Outbound requests | Fixed Discogs hosts only; images must be the release's own `i.discogs.com` URLs; no redirects; type and size checked. |
+| Container | Non-root, read-only filesystem, no capabilities, bound to `127.0.0.1` behind Caddy. |
 
 ---
 
 ## Deploying online
 
-The server listens only on `127.0.0.1` by default. To reach it from elsewhere, choose one
-of these:
+Production setup for **https://myvinyl.fluidgrid.site** (Docker behind the host's Caddy)
+is described step by step in **[deploy/DEPLOY.md](deploy/DEPLOY.md)**:
 
-- **A private network** such as [Tailscale](https://tailscale.com/). Only your own devices
-  can reach the app, and nothing is exposed to the public internet.
-- **A reverse proxy that handles HTTPS**, such as [Caddy](https://caddyserver.com/), which
-  gets certificates automatically:
-
-  ```
-  vinyl.example.com {
-      reverse_proxy 127.0.0.1:8000
-  }
-  ```
-
-Notes:
-
-- The session cookie is marked `Secure`, so login only works over HTTPS (or on `localhost`).
-- Login rate limiting is per client IP. uvicorn trusts `X-Forwarded-For` only from
-  `127.0.0.1`, so a proxy on the same machine works as-is. For a proxy on another host, set
-  `FORWARDED_ALLOW_IPS=<proxy-ip>`; otherwise all clients share one limit.
-- Run the app as an ordinary user, never as root or Administrator.
+1. Add a DNS record for `myvinyl.fluidgrid.site`.
+2. `cp deploy/env.template .env`, then generate the secrets with
+   `docker compose run --rm myvinyl python -m myvinyl.credentials`.
+3. `docker compose up -d --build` (the app listens on `127.0.0.1:8085`).
+4. Append `deploy/Caddyfile.myvinyl` to the host Caddyfile and reload Caddy.
 
 ---
 
 ## Backups and data
 
-- Everything lives in one SQLite file (`MYVINYL_DB`, default `myvinyl.db`). Stop the
-  server and copy that file to back it up.
-- **Export CSV** gives you a spreadsheet-friendly copy of your albums and values.
-- Discogs data is kept in two tables: `discogs_releases` holds the raw release JSON for
-  each album, and `discogs_pressings` holds the pressings checked with their prices.
-- New versions upgrade the database automatically on startup, without deleting anything.
+- Everything lives next to `MYVINYL_DB`: the database, `covers/`, and `backups/`.
+- Automatic backups use SQLite's online backup API, so they're consistent while the app
+  runs. **Admin → Back up now** makes one on demand.
+- Copy backups off the server regularly; see `deploy/DEPLOY.md`.
+- **Export CSV** gives a spreadsheet copy of any (filtered) view.
+- New versions upgrade the database automatically on startup without deleting anything.
 
 ---
 
@@ -310,13 +321,12 @@ Notes:
 
 ```powershell
 uv sync                                        # install, including dev tools
-uv run pytest                                  # 52 tests; Discogs is faked, no network needed
+uv run pytest                                  # 79 tests; Discogs is faked, no network
 uv run ruff check --fix . ; uv run ruff format .
 ```
 
-Discogs access can be swapped out: `create_app(settings, service=..., inline_jobs=True)`
-takes any object with the `DiscogsService` methods and runs background jobs inline. The
-tests use this, so they never call the real API or start threads.
+`create_app(settings, service=..., inline_jobs=True)` accepts a fake Discogs service and
+runs background jobs inline, so tests never touch the network or start threads.
 
 ---
 
@@ -325,22 +335,25 @@ tests use this, so they never call the real API or start threads.
 ```
 myvinyl/
 ├── src/myvinyl/
-│   ├── main.py          # FastAPI app: routes, security headers, CSRF, background lookups
-│   ├── discogs.py       # Discogs client (throttle, retries), matching, pricing, import
-│   ├── lookups.py       # Background lookup worker and weekly refresh scheduler
+│   ├── main.py          # Routes, access control, CSRF, background jobs, admin
+│   ├── db.py            # SQLite schema, migrations, owner-scoped queries, filters, stats
+│   ├── discogs.py       # Discogs client, matching, pricing, imports, image download
+│   ├── albums.py        # Field validation for albums, wishlist, accounts, profiles
+│   ├── auth.py          # Argon2id, one-time link tokens, login rate limiter
+│   ├── lookups.py       # Background job queue and periodic tasks
+│   ├── storage.py       # Saved covers and SQLite backups
 │   ├── charts.py        # Server-side SVG geometry for the value-history chart
-│   ├── db.py            # SQLite schema, migrations, parameterized queries
-│   ├── albums.py        # Album fields and form validation
-│   ├── auth.py          # Argon2id verification and login rate limiter
 │   ├── config.py        # Environment settings (fail closed)
-│   ├── credentials.py   # Password hash and secret key generator
-│   ├── __main__.py      # `uv run myvinyl` entry point
-│   ├── templates/       # Jinja2 pages: collection, album, form, login
-│   └── static/          # style.css, logo.svg, favicons
+│   ├── credentials.py   # Admin password hash and secret key generator
+│   ├── __main__.py      # `uv run myvinyl` entry point (log redaction, uvicorn)
+│   ├── templates/       # Jinja2 pages
+│   └── static/          # style.css (themes), logo, favicons
 ├── tests/               # pytest suite
+├── deploy/              # DEPLOY.md, Caddy site block, env template
 ├── docs/screenshots/    # Images used in this README
-├── CHANGELOG.md
-└── pyproject.toml
+├── Dockerfile, compose.yaml
+├── SECURITY.md, CHANGELOG.md, TODO.md
+└── pyproject.toml, uv.lock
 ```
 
 ---
@@ -349,32 +362,32 @@ myvinyl/
 
 The full history is in [CHANGELOG.md](CHANGELOG.md).
 
+### 0.6.0 - 2026-10-09
+- **Added:** multiple users with private collections, admin role, invite and reset links,
+  profiles, and five themes (Royal, Navy, Light, Gray, Automatic); trash with restore
+  and automatic purge; purchase price, date, and seller with gain and loss; dated notes;
+  wishlist with price checks, Discogs wantlist import, and "Got it"; cover grid view;
+  filters; stats page; printed reports; locally saved covers; automatic backups; Docker
+  and Caddy deployment.
+- **Security:** full review (SECURITY.md); password hashing moved off the event loop;
+  "Sign out everywhere"; no redirects on image downloads; tokens redacted from logs.
+
 ### 0.5.0 - 2026-10-09
-- **Added:** pick your pressing; add by barcode or catalog number; Discogs collection
-  import; value history chart with weekly automatic refresh; album and track ratings and
-  reviews.
-- **Changed:** lookups share one background worker.
+- Pick your pressing; add by barcode or catalog number; Discogs collection import; value
+  history with weekly refresh; album and track ratings and reviews.
 
 ### 0.4.0 - 2026-10-09
-- **Added:** value range across up to 10 pressings (low, median, high, and per-pressing
-  prices); full Discogs release metadata on a new album page; blank label and year filled
-  from Discogs; album art chooser; optional Discogs token; logo and favicon; range columns
-  in the CSV export.
-- **Changed:** lookups run in the background with throttling and retry; typed values
-  survive refreshes; a stronger Bills theme (blue pages, red and white controls);
-  times shown in Eastern time.
-- **Fixed:** pressing labels no longer include every company credit.
+- Value range across pressings, Discogs metadata, album art chooser, optional token,
+  stronger theme, Eastern time, logo and favicon.
 
 ### 0.3.0 - 2026-10-09
-- Automatic street value from the best-matching Discogs pressing, and a "Look up value"
-  button.
+- Automatic street value from Discogs.
 
 ### 0.2.0 - 2026-10-09
 - Buffalo Bills color theme.
 
 ### 0.1.0 - 2026-10-09
-- First release: albums with search, sort, totals, and CSV export; Argon2id login with rate
-  limiting and CSRF protection.
+- First release: albums, search, sort, totals, CSV export, secure login.
 
 ---
 

@@ -322,46 +322,145 @@ def identity(client: DiscogsClient) -> str:
     return username
 
 
-def collection(client: DiscogsClient, username: str, max_pages: int = 50):
-    """Yield form-ready dicts for every vinyl release in the user's Discogs collection."""
-    user = urllib.parse.quote(username, safe="")
+USERNAME_RE = re.compile(r"[\w.\-]{1,100}")
+
+
+def valid_username(username: str) -> bool:
+    return bool(USERNAME_RE.fullmatch(username or ""))
+
+
+def _user_releases(client: DiscogsClient, url: str, list_key: str, max_pages: int):
+    """Yield (item, basic_information) for each vinyl release in a paged user list."""
     page, pages = 1, 1
     while page <= min(pages, max_pages):
-        data = client.get(
-            f"/users/{user}/collection/folders/0/releases",
-            {"per_page": "100", "page": str(page), "sort": "artist"},
-        )
+        data = client.get(url, {"per_page": "100", "page": str(page)})
         pagination = data.get("pagination") if isinstance(data.get("pagination"), dict) else {}
         pages = _int_or_none(pagination.get("pages")) or 1
-        releases = data.get("releases") if isinstance(data.get("releases"), list) else []
-        for item in releases:
+        items = data.get(list_key) if isinstance(data.get(list_key), list) else []
+        for item in items:
             info = item.get("basic_information") if isinstance(item, dict) else None
-            if not isinstance(info, dict) or not isinstance(info.get("id"), int):
-                continue
-            artists = [a.get("name") for a in info.get("artists") or [] if isinstance(a, dict)]
-            labels = [lbl for lbl in info.get("labels") or [] if isinstance(lbl, dict)]
-            names, qty = [], None
-            for f in info.get("formats") or []:
-                if isinstance(f, dict):
-                    names += [_text(f.get("name"), 50), *_str_list(f.get("descriptions"))]
-                    qty = qty or _int_year(f.get("qty"))
-            if "Vinyl" not in names:
-                continue  # myvinyl only tracks vinyl
-            rating = _int_or_none(item.get("rating"))
-            title = _text(info.get("title"))
-            if not title:
-                continue
-            yield {
-                "release_id": info["id"],
-                "artist": clean_artist(next((a for a in artists if isinstance(a, str)), ""))
-                or "Unknown artist",
-                "title": title,
-                "year": _int_year(info.get("year")),
-                "label": _text(labels[0].get("name")) if labels else "",
-                "format": map_format(names, qty),
-                "rating": float(rating) if rating and 1 <= rating <= 5 else None,
-            }
+            if isinstance(info, dict) and isinstance(info.get("id"), int) and info["id"] > 0:
+                yield item, info
         page += 1
+
+
+def _release_fields(info: dict) -> dict | None:
+    """Form-ready fields from a collection/wantlist entry, or None if it isn't vinyl."""
+    artists = [a.get("name") for a in info.get("artists") or [] if isinstance(a, dict)]
+    labels = [lbl for lbl in info.get("labels") or [] if isinstance(lbl, dict)]
+    names, qty = [], None
+    for f in info.get("formats") or []:
+        if isinstance(f, dict):
+            names += [_text(f.get("name"), 50), *_str_list(f.get("descriptions"))]
+            qty = qty or _int_year(f.get("qty"))
+    title = _text(info.get("title"))
+    if "Vinyl" not in names or not title:
+        return None  # myvinyl only tracks vinyl
+    return {
+        "release_id": info["id"],
+        "artist": clean_artist(next((a for a in artists if isinstance(a, str)), ""))
+        or "Unknown artist",
+        "title": title,
+        "year": _int_year(info.get("year")),
+        "label": _text(labels[0].get("name")) if labels else "",
+        "format": map_format(names, qty),
+    }
+
+
+def collection(client: DiscogsClient, username: str, max_pages: int = 50):
+    """Yield form-ready dicts for every vinyl release in a Discogs collection.
+
+    Works for your own collection with your token, or anyone's public collection.
+    """
+    if not valid_username(username):
+        raise ValueError("Invalid Discogs username")
+    user = urllib.parse.quote(username, safe="")
+    url = f"/users/{user}/collection/folders/0/releases"
+    for item, info in _user_releases(client, url, "releases", max_pages):
+        fields = _release_fields(info)
+        if fields:
+            rating = _int_or_none(item.get("rating"))
+            fields["rating"] = float(rating) if rating and 1 <= rating <= 5 else None
+            yield fields
+
+
+def wantlist(client: DiscogsClient, username: str, max_pages: int = 20):
+    """Yield form-ready dicts for every vinyl release in a Discogs wantlist."""
+    if not valid_username(username):
+        raise ValueError("Invalid Discogs username")
+    user = urllib.parse.quote(username, safe="")
+    for item, info in _user_releases(client, f"/users/{user}/wants", "wants", max_pages):
+        fields = _release_fields(info)
+        if fields:
+            fields["notes"] = _text(item.get("notes"), 500)
+            yield fields
+
+
+def price_wish(
+    client: DiscogsClient, artist: str, title: str, year: int | None, release_id: int | None
+) -> tuple[int, int | None, int | None] | None:
+    """(release_id, lowest asking price, copies for sale) for a wishlist item, or None.
+
+    Uses the pressing you picked if there is one, else the best match: two API calls.
+    """
+    if release_id is None:
+        candidates = find_pressings(client, artist, title, year)
+        if not candidates:
+            return None
+        release_id = candidates[0].release_id
+    priced = price_pressing(client, Pressing(release_id, "", None, "", "", "", ""))
+    return release_id, priced.price_cents, priced.num_for_sale
+
+
+# --- Cover images ------------------------------------------------------------------------
+
+MAX_IMAGE_BYTES = 5_000_000
+IMAGE_TYPES = {  # magic bytes -> file extension
+    b"\xff\xd8\xff": "jpg",
+    b"\x89PNG\r\n\x1a\n": "png",
+    b"RIFF": "webp",  # checked further below
+    b"GIF87a": "gif",
+    b"GIF89a": "gif",
+}
+
+
+def image_extension(data: bytes) -> str | None:
+    """File extension for a real JPEG/PNG/WebP/GIF, judged by content, not headers."""
+    for magic, ext in IMAGE_TYPES.items():
+        if data.startswith(magic):
+            if ext == "webp" and data[8:12] != b"WEBP":
+                return None
+            return ext
+    return None
+
+
+class _RefuseRedirects(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        raise urllib.error.HTTPError(req.full_url, code, "redirect refused", headers, fp)
+
+
+_NO_REDIRECTS = urllib.request.build_opener(_RefuseRedirects)
+
+
+def fetch_image(url: str) -> tuple[bytes, str]:
+    """Download a Discogs image. Only https://i.discogs.com/ URLs are allowed.
+
+    Returns (bytes, extension); raises ValueError for anything that isn't a small image.
+    """
+    parsed = urllib.parse.urlsplit(url)
+    if parsed.scheme != "https" or parsed.hostname != "i.discogs.com" or parsed.port:
+        raise ValueError("Not a Discogs image URL")
+    req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})  # noqa: S310 (checked)
+    # No redirects: a redirect could point the request anywhere (including internal
+    # addresses) before we got a chance to check it.
+    with _NO_REDIRECTS.open(req, timeout=TIMEOUT_SECONDS) as resp:
+        data = resp.read(MAX_IMAGE_BYTES + 1)
+    if len(data) > MAX_IMAGE_BYTES:
+        raise ValueError("Image too large")
+    ext = image_extension(data)
+    if ext is None:
+        raise ValueError("Not a supported image")
+    return data, ext
 
 
 # --- Mapping Discogs values to myvinyl fields ----------------------------------------------
@@ -500,5 +599,14 @@ class DiscogsService:
     def find_by_identifier(self, identifier: str) -> list[dict]:
         return find_by_identifier(self.client, identifier)
 
-    def collection(self):
-        yield from collection(self.client, identity(self.client))
+    def collection(self, username: str):
+        yield from collection(self.client, username)
+
+    def wantlist(self, username: str):
+        yield from wantlist(self.client, username)
+
+    def price_wish(self, artist, title, year, release_id=None):
+        return price_wish(self.client, artist, title, year, release_id)
+
+    def fetch_image(self, url: str) -> tuple[bytes, str]:
+        return fetch_image(url)

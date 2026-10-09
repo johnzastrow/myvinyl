@@ -1,0 +1,38 @@
+# myvinyl behind the host's Caddy at https://myvinyl.fluidgrid.site
+#
+#   cp deploy/env.template .env   # then fill in the secrets (see deploy/DEPLOY.md)
+#   docker compose up -d --build
+#
+# The app is published on 127.0.0.1 only: nothing outside this server can reach it
+# except through Caddy.
+services:
+  myvinyl:
+    build: .
+    image: myvinyl:latest
+    container_name: myvinyl
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      MYVINYL_DB: /data/myvinyl.db
+      MYVINYL_BASE_URL: https://myvinyl.fluidgrid.site
+      # Trust X-Forwarded-For/-Proto from any peer. Safe ONLY because the port below is bound
+      # to 127.0.0.1, so the only peers are processes on this host (Caddy). Requests arrive
+      # from the Docker bridge address, not 127.0.0.1, so the default setting would ignore
+      # Caddy's headers and every login attempt would share one rate-limit bucket.
+      FORWARDED_ALLOW_IPS: "*"
+    ports:
+      - "127.0.0.1:8085:8000"
+    volumes:
+      - myvinyl-data:/data       # database, saved covers, backups
+    read_only: true              # only /data and /tmp are writable
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 512m
+    pids_limit: 200
+
+volumes:
+  myvinyl-data:

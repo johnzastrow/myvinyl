@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}Trash - myvinyl{% endblock %}
+{% block content %}
+<section class="panel">
+  <h1>Trash</h1>
+  <p class="muted">Deleted albums stay here with all their details{% if trash_days %} for {{ trash_days }} days, then they are removed permanently{% endif %}. Restore one to put it back in the collection.</p>
+  {% if albums %}
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>Album</th><th>Deleted</th><th class="num">Value</th><th></th></tr></thead>
+    <tbody>
+      {% for a in albums %}
+      <tr>
+        <td><strong>{{ a.artist }}</strong> &ndash; {{ a.title }}{% if a.year %} ({{ a.year }}){% endif %}</td>
+        <td>{{ a.deleted_at | eastern }}</td>
+        <td class="num">{{ a.value_cents | money }}</td>
+        <td class="row-actions">
+          <form method="post" action="/trash/{{ a.id }}/restore">
+            <input type="hidden" name="csrf" value="{{ csrf }}">
+            <button class="button-small" type="submit">Restore</button>
+          </form>
+          <form method="post" action="/trash/{{ a.id }}/purge">
+            <input type="hidden" name="csrf" value="{{ csrf }}">
+            <button class="link danger-link" type="submit">Delete forever</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  <form class="actions" method="post" action="/trash/empty">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <button class="button-outline" type="submit">Empty trash ({{ albums | length }})</button>
+  </form>
+  {% else %}
+  <p class="empty">The trash is empty.</p>
+  {% endif %}
+</section>
+{% endblock %}

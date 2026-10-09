@@ -12,6 +12,7 @@ from myvinyl.discogs import Enrichment, Pressing
 from myvinyl.main import create_app
 
 PASSWORD = "correct horse battery"
+PNG = b"\x89PNG\r\n\x1a\n" + b"0" * 32
 PASSWORD_HASH = hash_password(PASSWORD)
 
 RELEASE = {
@@ -78,6 +79,11 @@ class FakeService:
         self.error = None
         self.identifier_matches = []
         self.collection_items = []
+        self.want_items = []
+        self.wish_price = (555, 2500, 4)
+        self.wish_calls = []
+        self.image_urls = []
+        self.image_error = False
 
     def enrich(self, artist, title, year, release_id=None):
         self.calls.append((artist, title, year))
@@ -93,8 +99,25 @@ class FakeService:
         self.identifier = identifier
         return self.identifier_matches
 
-    def collection(self):
+    def collection(self, username):
+        self.username = username
         yield from self.collection_items
+
+    def wantlist(self, username):
+        self.username = username
+        yield from self.want_items
+
+    def price_wish(self, artist, title, year, release_id=None):
+        self.wish_calls.append((artist, title, release_id))
+        if self.wish_price and release_id:
+            return (release_id, *self.wish_price[1:])
+        return self.wish_price
+
+    def fetch_image(self, url):
+        self.image_urls.append(url)
+        if self.image_error:
+            raise ValueError("bad image")
+        return PNG, "png"
 
 
 @pytest.fixture
@@ -118,9 +141,13 @@ def csrf_from(client, path):
     return re.search(r'name="csrf" value="([^"]+)"', html).group(1)
 
 
-def login(client, password=PASSWORD):
+def login(client, password=PASSWORD, username="admin"):
     token = csrf_from(client, "/login")
-    return client.post("/login", data={"csrf": token, "password": password}, follow_redirects=False)
+    return client.post(
+        "/login",
+        data={"csrf": token, "username": username, "password": password},
+        follow_redirects=False,
+    )
 
 
 @pytest.fixture
@@ -375,6 +402,7 @@ def test_interrupted_lookups_marked_on_startup(tmp_path):
     db.init(path)
     album_id = db.create_album(
         path,
+        None,
         {
             "artist": "A",
             "title": "B",
@@ -406,12 +434,19 @@ def test_choose_album_art(authed):
     link = first_album_link(authed)
     page = authed.get(link).text
     assert "2 images from Discogs" in page and "back150.jpg" in page
-    assert re.search(r'<img class="cover" src="https://i.discogs.com/cover.jpg"', page)
+    # The default (primary) cover was saved locally and is served by myvinyl.
+    assert authed.app.state  # app is up
+    assert re.search(r'<img class="cover" src="/covers/\d+\?v=\d+\.png"', page)
+    album_id = int(link.rsplit("/", 1)[1])
+    r = authed.get(f"/covers/{album_id}")
+    assert r.status_code == 200 and r.headers["content-type"] == "image/png"
 
     token = csrf_from(authed, link)
     authed.post(link + "/cover", data={"csrf": token, "uri": "https://i.discogs.com/back.jpg"})
     page = authed.get(link).text
-    assert re.search(r'<img class="cover" src="https://i.discogs.com/back.jpg"', page)
+    assert (
+        'art-selected" type="submit" aria-pressed="true" title="Use this image (secondary)' in page
+    )
 
 
 def test_cover_must_be_one_of_the_release_images(authed):
@@ -560,20 +595,23 @@ def test_import_collection_skips_duplicates(authed, lookup, tmp_path):
         },
     ]
     token = csrf_from(authed, "/import")
-    authed.post("/import", data={"csrf": token, "condition": "NM"})
+    authed.post("/import", data={"csrf": token, "condition": "NM", "username": "vinylfan"})
     assert "2 added, 0 already here" in authed.get("/import").text
-    authed.post("/import", data={"csrf": token, "condition": "NM"})
+    authed.post("/import", data={"csrf": token, "condition": "NM", "username": "vinylfan"})
     assert "0 added, 2 already here" in authed.get("/import").text
 
     page = authed.get("/").text
     assert "Closer" in page and "Post" in page and "★★★★★" in page
-    albums = db.list_albums(tmp_path / "test.db")
+    albums = db.list_albums(tmp_path / "test.db", 1)
     assert all(a["pressing_locked"] == 1 and a["condition"] == "NM" for a in albums)
 
 
 def test_import_rejects_bad_condition(authed):
     token = csrf_from(authed, "/import")
-    assert authed.post("/import", data={"csrf": token, "condition": "X"}).status_code == 400
+    r = authed.post("/import", data={"csrf": token, "condition": "X", "username": "a"})
+    assert r.status_code == 422
+    r = authed.post("/import", data={"csrf": token, "condition": "NM", "username": "../x"})
+    assert r.status_code == 422
 
 
 # --- Value history -------------------------------------------------------------------------
@@ -591,8 +629,8 @@ def test_history_chart_and_scheduled_refresh(authed, lookup, tmp_path):
         conn.execute("UPDATE albums SET discogs_checked_at = datetime('now', '-8 days')")
         conn.execute("UPDATE value_history SET checked_at = datetime('now', '-8 days')")
     lookup.result = dataclasses.replace(lookup.result, value_cents=3000, high_cents=9000)
-    assert authed.app.state.refresh_due() == 1
-    assert authed.app.state.refresh_due() == 0  # fresh again
+    assert "queued 1 albums" in authed.app.state.hourly()
+    assert authed.app.state.hourly() == ""  # fresh again
 
     page = authed.get(link).text
     assert "Value history" in page and "<polyline" in page and "<polygon" in page

@@ -1,0 +1,31 @@
+{# Filter bar shared by the collection and stats pages. Expects: f, options, formats,
+   conditions, ratings, and `action` (the page URL). #}
+<form method="get" action="{{ action }}" class="filters" aria-label="Filter the collection">
+  {% if view is defined %}<input type="hidden" name="view" value="{{ view }}">{% endif %}
+  {% if sort is defined %}<input type="hidden" name="sort" value="{{ sort }}"><input type="hidden" name="dir" value="{{ direction }}">{% endif %}
+  <input type="search" name="q" value="{{ f.q or '' }}" placeholder="Search artist, title, label" maxlength="200" aria-label="Search" class="filter-q">
+  <select name="genre" aria-label="Genre or style">
+    <option value="">Any genre</option>
+    {% for g in options.genres %}<option value="{{ g }}" {{ "selected" if f.genre == g }}>{{ g }}</option>{% endfor %}
+  </select>
+  <select name="decade" aria-label="Decade">
+    <option value="">Any decade</option>
+    {% for d in options.decades %}<option value="{{ d }}" {{ "selected" if f.decade == d | string }}>{{ d }}s</option>{% endfor %}
+  </select>
+  <select name="format" aria-label="Format">
+    <option value="">Any format</option>
+    {% for x in formats %}<option value="{{ x }}" {{ "selected" if f.format == x }}>{{ x }}</option>{% endfor %}
+  </select>
+  <select name="condition" aria-label="Condition">
+    <option value="">Any condition</option>
+    {% for c in conditions %}<option value="{{ c }}" {{ "selected" if f.condition == c }}>{{ c }}</option>{% endfor %}
+  </select>
+  <select name="min_rating" aria-label="Minimum rating">
+    <option value="">Any rating</option>
+    {% for r in ratings | reverse %}{% if r == r | int %}<option value="{{ r }}" {{ "selected" if f.min_rating and f.min_rating | float == r }}>{{ r | int }}+ stars</option>{% endif %}{% endfor %}
+  </select>
+  <input name="min_value" value="{{ f.min_value or '' }}" placeholder="Min $" inputmode="decimal" maxlength="12" aria-label="Minimum value" class="filter-money">
+  <input name="max_value" value="{{ f.max_value or '' }}" placeholder="Max $" inputmode="decimal" maxlength="12" aria-label="Maximum value" class="filter-money">
+  <button class="button-small" type="submit">Filter</button>
+  {% if f %}<a class="small" href="{{ action }}{{ '?view=' ~ view if view is defined and view == 'grid' }}">Clear</a>{% endif %}
+</form>
