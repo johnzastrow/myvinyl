@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}Log in - myvinyl{% endblock %}
+{% block content %}
+<form class="narrow" method="post" action="/login">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <label for="password">Password</label>
+  <input id="password" name="password" type="password" autocomplete="current-password" required autofocus>
+  {% if error %}<p class="error">{{ error }}</p>{% endif %}
+  <button type="submit">Log in</button>
+</form>
+{% endblock %}

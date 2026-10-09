@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% macro sort_link(key, label) -%}
+  {%- set next_dir = "desc" if sort == key and direction == "asc" else "asc" -%}
+  <a href="/?q={{ q | urlencode }}&amp;sort={{ key }}&amp;dir={{ next_dir }}">{{ label }}
+  {%- if sort == key %} {{ "▲" if direction == "asc" else "▼" }}{% endif %}</a>
+{%- endmacro %}
+{% block content %}
+<div class="toolbar">
+  <p class="totals">{{ count }} album{{ "" if count == 1 else "s" }} &middot; {{ total_value | money }}</p>
+  <form method="get" action="/" class="search">
+    <input type="hidden" name="sort" value="{{ sort }}">
+    <input type="hidden" name="dir" value="{{ direction }}">
+    <input type="search" name="q" value="{{ q }}" placeholder="Search artist, title, label" maxlength="200">
+  </form>
+  <a class="button" href="/albums/new">Add album</a>
+</div>
+
+{% if albums %}
+<div class="table-wrap">
+<table>
+  <thead>
+    <tr>
+      <th>{{ sort_link("artist", "Artist") }}</th>
+      <th>{{ sort_link("title", "Title") }}</th>
+      <th>{{ sort_link("year", "Year") }}</th>
+      <th>{{ sort_link("label", "Label") }}</th>
+      <th>{{ sort_link("format", "Format") }}</th>
+      <th>{{ sort_link("condition", "Cond.") }}</th>
+      <th class="num">{{ sort_link("value", "Value") }}</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for a in albums %}
+    <tr>
+      <td><a href="/albums/{{ a.id }}/edit">{{ a.artist }}</a></td>
+      <td>{{ a.title }}</td>
+      <td>{{ a.year or "" }}</td>
+      <td>{{ a.label }}</td>
+      <td>{{ a.format }}</td>
+      <td>{{ a.condition }}</td>
+      <td class="num">{{ a.value_cents | money }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+<p class="muted"><a href="/export.csv">Export CSV</a></p>
+{% elif q %}
+<p class="muted">No albums match "{{ q }}".</p>
+{% else %}
+<p class="muted">No albums yet. Add your first record.</p>
+{% endif %}
+{% endblock %}

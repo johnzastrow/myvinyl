@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}{{ "Edit" if album_id else "Add" }} album - myvinyl{% endblock %}
+{% macro field(name, label, type="text", attrs="") -%}
+  <label for="{{ name }}">{{ label }}</label>
+  <input id="{{ name }}" name="{{ name }}" type="{{ type }}" value="{{ values.get(name, '') }}" {{ attrs | safe }}>
+  {% if errors.get(name) %}<p class="error">{{ errors[name] }}</p>{% endif %}
+{%- endmacro %}
+{% macro choice(name, label, options) -%}
+  <label for="{{ name }}">{{ label }}</label>
+  <select id="{{ name }}" name="{{ name }}">
+    {% for opt in options %}
+    <option value="{{ opt }}" {{ "selected" if values.get(name) == opt }}>{{ opt }}</option>
+    {% endfor %}
+  </select>
+  {% if errors.get(name) %}<p class="error">{{ errors[name] }}</p>{% endif %}
+{%- endmacro %}
+{% block content %}
+<h1>{{ "Edit album" if album_id else "Add album" }}</h1>
+{% if notice %}<p class="notice">{{ notice }}</p>{% endif %}
+<form class="narrow" method="post" action="{{ '/albums/%d' % album_id if album_id else '/albums' }}">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  {{ field("artist", "Artist", attrs='required maxlength="200"') }}
+  {{ field("title", "Title", attrs='required maxlength="200"') }}
+  <div class="row">
+    <div>{{ field("year", "Year", "number", 'min="1900" max="2100"') }}</div>
+    <div>{{ field("value", "Street value ($)", "text", 'inputmode="decimal" placeholder="0.00"') }}</div>
+  </div>
+  {% if album and album.value_source == "discogs" %}
+  <p class="hint">Value: lowest Discogs asking price for
+    <a href="https://www.discogs.com/release/{{ album.discogs_release_id }}" target="_blank" rel="noopener noreferrer">release {{ album.discogs_release_id }}</a>{% if album.value_cents is none %} (none for sale){% endif %}.</p>
+  {% elif not album_id %}
+  <p class="hint">Leave value blank to look it up on Discogs automatically.</p>
+  {% endif %}
+  {{ field("label", "Label", attrs='maxlength="200"') }}
+  <div class="row">
+    <div>{{ choice("format", "Format", formats) }}</div>
+    <div>{{ choice("condition", "Condition", conditions) }}</div>
+  </div>
+  <label for="notes">Notes</label>
+  <textarea id="notes" name="notes" rows="3" maxlength="2000">{{ values.get("notes", "") }}</textarea>
+  {% if errors.get("notes") %}<p class="error">{{ errors["notes"] }}</p>{% endif %}
+  <div class="actions">
+    <button type="submit">Save</button>
+    <a href="/">Cancel</a>
+  </div>
+</form>
+{% if album_id %}
+<form class="narrow lookup" method="post" action="/albums/{{ album_id }}/lookup">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <button class="link" type="submit">Look up value on Discogs</button>
+</form>
+<form class="narrow danger" method="post" action="/albums/{{ album_id }}/delete">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <button class="link" type="submit">Delete this album</button>
+</form>
+{% endif %}
+{% endblock %}

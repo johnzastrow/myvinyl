@@ -1,0 +1,128 @@
+/* Theme: Buffalo Bills team colors (royal blue, red, white, navy). */
+:root {
+  --royal: #00338d;
+  --red: #c60c30;
+  --navy: #0c2340;
+
+  --bg: #ffffff;
+  --fg: #0c2340;
+  --muted: #5a6478;
+  --line: #d9dee8;
+  --stripe: #f3f6fb;
+  --link: #00338d;
+  --accent: #00338d;        /* primary buttons */
+  --accent-fg: #ffffff;
+  --bar-bg: #00338d;
+  --bar-fg: #ffffff;
+  --error: #c60c30;
+  color-scheme: light dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #08172b;
+    --fg: #eef2f8;
+    --muted: #a3afc4;
+    --line: #1f3456;
+    --stripe: #0e2038;
+    --link: #8fb4ff;
+    --accent: #c60c30;      /* red buttons read better than blue on navy */
+    --accent-fg: #ffffff;
+    --bar-bg: #0c2340;
+    --bar-fg: #ffffff;
+    --error: #ff7a8f;
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+/* Top bar: royal blue with a red-white-red helmet stripe along the bottom. */
+.bar {
+  background: var(--bar-bg);
+  color: var(--bar-fg);
+  border-bottom: 3px solid var(--red);
+  box-shadow: 0 3px 0 #ffffff, 0 6px 0 var(--red);
+  margin-bottom: 24px;
+}
+
+header, main { max-width: 960px; margin: 0 auto; padding: 0 16px; }
+header { display: flex; justify-content: space-between; align-items: center; height: 56px; }
+.brand {
+  font-weight: 800;
+  font-style: italic;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  text-decoration: none;
+}
+.bar a, .bar button.link { color: var(--bar-fg); }
+
+a { color: var(--link); }
+h1 { font-size: 1.25rem; font-weight: 700; }
+
+.toolbar { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin: 8px 0 16px; }
+.totals { margin: 0; color: var(--muted); }
+.search { flex: 1; min-width: 180px; }
+
+input, select, textarea {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+}
+input:focus, select:focus, textarea:focus {
+  outline: 2px solid var(--link);
+  outline-offset: -1px;
+}
+
+button, .button {
+  display: inline-block;
+  padding: 8px 14px;
+  border: 0;
+  border-radius: 6px;
+  background: var(--accent);
+  color: var(--accent-fg);
+  font: inherit;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+}
+button:hover, .button:hover { filter: brightness(1.15); }
+
+button.link {
+  padding: 0;
+  background: none;
+  color: var(--muted);
+  font-weight: 400;
+  text-decoration: underline;
+}
+
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; }
+th, td { padding: 8px 6px; border-bottom: 1px solid var(--line); text-align: left; white-space: nowrap; }
+th { font-weight: 600; color: var(--muted); border-bottom: 2px solid var(--red); }
+th a { color: inherit; text-decoration: none; }
+tbody tr:nth-child(even) { background: var(--stripe); }
+.num { text-align: right; }
+
+.narrow { max-width: 480px; }
+.narrow label { display: block; margin: 14px 0 4px; font-size: 0.9rem; color: var(--muted); }
+.row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.actions { display: flex; gap: 16px; align-items: center; margin-top: 20px; }
+.lookup { margin-top: 24px; }
+.danger { margin-top: 16px; }
+.hint { margin: 4px 0 0; color: var(--muted); font-size: 0.85rem; }
+.notice { padding: 8px 12px; border-left: 3px solid var(--red); background: var(--stripe); }
+.danger button.link { color: var(--error); }
+
+.error { margin: 4px 0 0; color: var(--error); font-size: 0.9rem; }
+.muted { color: var(--muted); }
