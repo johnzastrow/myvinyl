@@ -26,6 +26,7 @@ CREATE TABLE IF NOT EXISTS users (
     theme           TEXT NOT NULL DEFAULT 'auto',
     discogs_username TEXT NOT NULL DEFAULT '',
     email           TEXT,             -- optional; for future email features (SMTP2GO)
+    discogs_token   TEXT,             -- the user's Discogs token, AES-GCM encrypted
     created_at      TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     last_login_at   TEXT
 );
@@ -186,6 +187,7 @@ USER_MIGRATIONS = {
     "theme": "TEXT NOT NULL DEFAULT 'auto'",
     "discogs_username": "TEXT NOT NULL DEFAULT ''",
     "email": "TEXT",
+    "discogs_token": "TEXT",
 }
 
 _condition_rank = " ".join(f"WHEN '{c}' THEN {i}" for i, c in enumerate(CONDITIONS))
@@ -358,6 +360,20 @@ def set_identity(path: Path, user_id: int, username: str, email: str | None) -> 
         except sqlite3.IntegrityError:  # lost a race with another change
             return "username"
     return ""
+
+
+def set_discogs_token(path: Path, user_id: int, sealed: str | None) -> None:
+    """Store a user's encrypted Discogs token, or (None) remove it."""
+    with connect(path) as conn:
+        conn.execute("UPDATE users SET discogs_token = ? WHERE id = ?", (sealed, user_id))
+
+
+def set_discogs_username_if_blank(path: Path, user_id: int, username: str) -> None:
+    with connect(path) as conn:
+        conn.execute(
+            "UPDATE users SET discogs_username = ? WHERE id = ? AND discogs_username = ''",
+            (username, user_id),
+        )
 
 
 def set_profile(path: Path, user_id: int, profile: dict) -> None:

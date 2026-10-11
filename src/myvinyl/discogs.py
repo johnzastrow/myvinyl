@@ -5,8 +5,8 @@ current asking price of the top matches, picks the best-matching pressing automa
 and fetches that pressing's full release record. Matching is automatic, so the chosen
 pressing can differ from the one you own; the range covers all checked pressings.
 
-Works without a token (25 requests/min). An optional personal token raises the limit to
-60/min, so lookups finish about twice as fast.
+Works without a token (25 requests/min). A user's own personal token raises the limit to
+60/min. Discogs counts both limits per source IP, so all users of one server share them.
 """
 
 import json
@@ -36,23 +36,41 @@ log = logging.getLogger("myvinyl.discogs")
 LOOKUP_ERRORS = (urllib.error.URLError, TimeoutError, ValueError, OSError)
 
 
-class DiscogsClient:
-    """Minimal JSON client with a process-wide request throttle and one 429 retry."""
+class Pacer:
+    """Spaces out requests to stay under a per-minute limit; safe to share across threads."""
 
-    def __init__(self, token: str = "") -> None:
-        self._token = token
-        # Stay just under the documented per-minute limits (60 with a token, 25 without).
-        self._min_interval = 60 / (55 if token else 23)
+    def __init__(self, per_minute: int) -> None:
+        self._min_interval = 60 / per_minute
         self._lock = threading.Lock()
         self._next_at = 0.0
 
-    def _wait_turn(self) -> None:
+    def wait_turn(self) -> None:
         with self._lock:
             now = time.monotonic()
             wait = self._next_at - now
             self._next_at = max(now, self._next_at) + self._min_interval
         if wait > 0:
             time.sleep(wait)
+
+
+# Discogs limits requests per source IP (60/min with a token, 25 without), so every
+# client in this process shares one pacer per kind, staying just under each limit.
+TOKEN_PACER = Pacer(55)
+ANONYMOUS_PACER = Pacer(23)
+
+
+class DiscogsClient:
+    """Minimal JSON client with a process-wide request throttle and one 429 retry."""
+
+    def __init__(self, token: str = "") -> None:
+        self._token = token
+        self._pacer = TOKEN_PACER if token else ANONYMOUS_PACER
+
+    def __repr__(self) -> str:  # never show the token
+        return f"DiscogsClient(authenticated={bool(self._token)})"
+
+    def _wait_turn(self) -> None:
+        self._pacer.wait_turn()
 
     def get(self, path: str, params: dict[str, str] | None = None) -> dict:
         url = API + path
@@ -592,6 +610,10 @@ class DiscogsService:
     def __init__(self, client: DiscogsClient, has_token: bool) -> None:
         self.client = client
         self.has_token = has_token
+
+    def identity(self) -> str:
+        """Username of the token's owner; checks that a token works."""
+        return identity(self.client)
 
     def enrich(self, artist, title, year, release_id=None) -> Enrichment | None:
         return enrich(self.client, artist, title, year, release_id)

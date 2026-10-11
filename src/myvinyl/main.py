@@ -8,6 +8,7 @@ import logging
 import secrets
 import sqlite3
 import threading
+import urllib.error
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from pathlib import Path
@@ -49,6 +50,7 @@ from .auth import LoginLimiter, hash_password, hash_token, new_link_token, verif
 from .config import ConfigError, Settings
 from .lookups import JobQueue, PeriodicTask
 from .storage import COVER_EXTENSIONS, Storage
+from .tokens import TokenBox, hint, valid_token
 
 PKG_DIR = Path(__file__).parent
 SESSION_MAX_AGE = 12 * 60 * 60  # 12 hours
@@ -162,14 +164,50 @@ def create_app(
     settings: Settings,
     service: discogs.DiscogsService | None = None,
     inline_jobs: bool = False,
+    service_factory=None,
 ) -> FastAPI:
     """Build the app. Tests pass a fake `service` and inline_jobs=True (no threads)."""
-    if service is None:
-        client = discogs.DiscogsClient(settings.discogs_token)
-        service = discogs.DiscogsService(client, has_token=bool(settings.discogs_token))
+    if len(settings.token_key) != 32:
+        raise ConfigError("MYVINYL_TOKEN_KEY must be set (32 bytes, base64).")
+    token_box = TokenBox(settings.token_key)
+
+    # Discogs access: each user's own token, or anonymous access without one. Tests pass
+    # a fake `service` (used for everyone) or a `service_factory(token)`.
+    if service_factory is None:
+        if service is not None:
+            service_factory = lambda token: service  # noqa: E731
+        else:
+
+            def service_factory(token: str) -> discogs.DiscogsService:
+                return discogs.DiscogsService(discogs.DiscogsClient(token), bool(token))
+
+    anonymous = service_factory("")
+    services: dict[int, tuple[str, object]] = {}  # user id -> (token, service)
+    services_lock = threading.Lock()
+
     path = settings.db_path
     db.init(path)
     storage = Storage(path)
+
+    def user_token(user) -> str:
+        """The user's decrypted Discogs token, or "" (none, or it can't be decrypted)."""
+        return token_box.open(user["id"], user["discogs_token"]) if user else ""
+
+    def discogs_for(owner: int | None):
+        """Discogs access for work on this user's collection: their token, else anonymous."""
+        token = user_token(db.get_user(path, owner)) if owner else ""
+        if not token:
+            return anonymous
+        with services_lock:
+            cached = services.get(owner)
+            if cached is None or not secrets.compare_digest(cached[0], token):
+                cached = (token, service_factory(token))
+                services[owner] = cached
+            return cached[1]
+
+    def forget_service(user_id: int) -> None:
+        with services_lock:
+            services.pop(user_id, None)
 
     # First run: create the admin account from MYVINYL_PASSWORD_HASH.
     if db.count_users(path) == 0:
@@ -197,7 +235,7 @@ def create_app(
         if not uri:
             return
         try:
-            data, ext = service.fetch_image(uri)
+            data, ext = discogs_for(album["owner_id"]).fetch_image(uri)
         except (*discogs.LOOKUP_ERRORS, ValueError) as exc:
             log.warning("cover download failed for album %s: %s", album_id, exc)
             return
@@ -224,7 +262,8 @@ def create_app(
             return  # deleted while queued
         pinned = album["discogs_release_id"] if album["pressing_locked"] else None
         try:
-            result = service.enrich(album["artist"], album["title"], album["year"], pinned)
+            svc = discogs_for(album["owner_id"])
+            result = svc.enrich(album["artist"], album["title"], album["year"], pinned)
         except discogs.LOOKUP_ERRORS as exc:
             log.warning("Discogs lookup failed for album %s: %s", album_id, exc)
             db.set_discogs_status(path, album_id, "error")
@@ -241,7 +280,8 @@ def create_app(
             return
         pinned = wish["discogs_release_id"] if wish["pressing_locked"] else None
         try:
-            found = service.price_wish(wish["artist"], wish["title"], wish["year"], pinned)
+            svc = discogs_for(wish["owner_id"])
+            found = svc.price_wish(wish["artist"], wish["title"], wish["year"], pinned)
         except discogs.LOOKUP_ERRORS as exc:
             log.warning("Discogs price check failed for wish %s: %s", wish_id, exc)
             db.set_wish_status(path, wish_id, "error")
@@ -314,7 +354,7 @@ def create_app(
     def run_collection_import(owner_id: int, username: str, condition: str) -> None:
         state = imports[("collection", owner_id)]
         try:
-            for item in service.collection(username):
+            for item in discogs_for(owner_id).collection(username):
                 if db.count_albums(path, owner_id) >= MAX_ALBUMS_PER_USER:
                     state.update(state="error", message="The collection is at its size limit.")
                     return
@@ -348,7 +388,7 @@ def create_app(
     def run_wantlist_import(owner_id: int, username: str) -> None:
         state = imports[("wantlist", owner_id)]
         try:
-            for item in service.wantlist(username):
+            for item in discogs_for(owner_id).wantlist(username):
                 if db.wish_for_release(path, owner_id, item["release_id"]):
                     state["skipped"] += 1
                     continue
@@ -653,8 +693,66 @@ def create_app(
         return RedirectResponse("/login", status_code=303)
 
     def account_page_response(request, status_code=200, **extra):
-        context = {"errors": {}, "saved": "", "themes": THEMES, "profile": None, **extra}
+        context = {
+            "errors": {},
+            "saved": "",
+            "themes": THEMES,
+            "profile": None,
+            # Only the last 4 characters of your token are ever shown.
+            "token_hint": hint(user_token(request.state.user)),
+            **extra,
+        }
         return render(request, "account.html", status_code, **context)
+
+    @router.post("/account/discogs-token")
+    async def save_discogs_token(request: Request):
+        """Add or replace your Discogs token. Requires your current password, and the
+        token must work on Discogs before it is stored (encrypted)."""
+        form = await checked_form(request)
+        user = request.state.user
+        token = str(form.get("token", "")).strip()
+        current = form.get("current")
+        errors = {}
+        if not valid_token(token):
+            errors["discogs_key"] = (
+                "That doesn't look like a Discogs token (20 to 100 letters and digits)."
+            )
+        if not isinstance(current, str) or not await check_password(user["password_hash"], current):
+            errors["key_current"] = "That isn't your current password."
+        if not errors:
+            try:
+                username = await run_in_threadpool(service_factory(token).identity)
+            except urllib.error.HTTPError as exc:
+                log.info("Discogs token check for user %s: HTTP %s", user["id"], exc.code)
+                errors["discogs_key"] = (
+                    "Discogs didn't accept this token. Check it and try again."
+                    if exc.code in (401, 403)
+                    else "Discogs couldn't check the token right now. Try again."
+                )
+            except (*discogs.LOOKUP_ERRORS, ValueError):
+                errors["discogs_key"] = "Discogs couldn't be reached to check the token. Try again."
+        if errors:
+            return account_page_response(request, 422, errors=errors)
+        db.set_discogs_token(path, user["id"], token_box.seal(user["id"], token))
+        db.set_discogs_username_if_blank(path, user["id"], username)
+        forget_service(user["id"])
+        log.info("user %s saved a Discogs token", user["id"])
+        request.state.user = db.get_user(path, user["id"])
+        return account_page_response(request, saved="token")
+
+    @router.post("/account/discogs-token/delete")
+    async def delete_discogs_token(request: Request):
+        form = await checked_form(request)
+        user = request.state.user
+        current = form.get("current")
+        if not isinstance(current, str) or not await check_password(user["password_hash"], current):
+            errors = {"key_remove_current": "That isn't your current password."}
+            return account_page_response(request, 422, errors=errors)
+        db.set_discogs_token(path, user["id"], None)
+        forget_service(user["id"])
+        log.info("user %s removed their Discogs token", user["id"])
+        request.state.user = db.get_user(path, user["id"])
+        return account_page_response(request, saved="token_removed")
 
     @router.get("/account")
     async def account_page(request: Request):
@@ -841,8 +939,9 @@ def create_app(
         response to send instead: the form with an error, or the page for choosing among
         several pressings. `album` is set when editing an existing album.
         """
+        owner = album["owner_id"] if album else owner_id(request)
         try:
-            matches = await run_in_threadpool(service.find_by_identifier, identifier)
+            matches = await run_in_threadpool(discogs_for(owner).find_by_identifier, identifier)
         except discogs.LOOKUP_ERRORS as exc:
             log.warning("Discogs identifier search failed: %s", exc)
             matches = None
@@ -1318,7 +1417,6 @@ def create_app(
             ],
             backup_hours=settings.backup_hours,
             roles=ROLES,
-            has_token=service.has_token,
             queued=jobs.pending(),
             **extra,
         )
@@ -1406,6 +1504,16 @@ def create_app(
         if error:
             return admin_page(request, 422, identity_error=error, identity_user=user_id)
         log.info("admin %s updated username/email of user %s", request.state.user["id"], user_id)
+        return RedirectResponse("/admin", status_code=303)
+
+    @admin.post("/users/{user_id}/discogs-token/clear")
+    async def clear_user_token(request: Request, user_id: int):
+        """Admin: remove a user's Discogs token (e.g. after a leak). Admins never see it."""
+        await checked_form(request)
+        target_user(request, user_id)
+        db.set_discogs_token(path, user_id, None)
+        forget_service(user_id)
+        log.info("admin %s cleared the Discogs token of user %s", request.state.user["id"], user_id)
         return RedirectResponse("/admin", status_code=303)
 
     @admin.post("/links/{link_id}/revoke")

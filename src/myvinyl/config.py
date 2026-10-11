@@ -1,9 +1,14 @@
 """Runtime settings, read from environment variables."""
 
+import logging
 import os
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
+
+from .tokens import parse_key
+
+log = logging.getLogger("myvinyl.config")
 
 
 class ConfigError(RuntimeError):
@@ -25,8 +30,8 @@ class Settings:
     # Only used to create the first admin account when the database has no users yet.
     password_hash: str = field(default="", repr=False)
     admin_username: str = "admin"
-    # Shared Discogs token for the whole server (optional; raises the rate limit).
-    discogs_token: str = field(default="", repr=False)
+    # Encrypts the Discogs tokens users store in their profiles (32 bytes, AES-256).
+    token_key: bytes = field(default=b"", repr=False)
     # Re-check Discogs prices for albums older than this many days (0 turns it off).
     refresh_days: int = 7
     backup_hours: int = 24  # 0 turns automatic backups off
@@ -49,9 +54,16 @@ class Settings:
         admin_username = os.environ.get("MYVINYL_ADMIN_USER", "admin").strip()
         if not re.fullmatch(r"[A-Za-z0-9_.\-]{3,32}", admin_username):
             raise ConfigError("MYVINYL_ADMIN_USER must be 3 to 32 letters, digits, . _ or -.")
-        discogs_token = os.environ.get("MYVINYL_DISCOGS_TOKEN", "").strip()
-        if discogs_token and not re.fullmatch(r"[A-Za-z0-9]{20,100}", discogs_token):
-            raise ConfigError("MYVINYL_DISCOGS_TOKEN does not look like a Discogs token.")
+        try:
+            token_key = parse_key(os.environ.get("MYVINYL_TOKEN_KEY", ""))
+        except ValueError:
+            raise ConfigError(
+                "MYVINYL_TOKEN_KEY must be set: generate one with"
+                " `python -m myvinyl.credentials --token-key`."
+            ) from None
+        if os.environ.get("MYVINYL_DISCOGS_TOKEN", "").strip():
+            # Since 0.8.0 each user enters their own token on the Profile page.
+            log.warning("MYVINYL_DISCOGS_TOKEN is no longer used; remove it from the environment")
         base_url = os.environ.get("MYVINYL_BASE_URL", "").strip().rstrip("/")
         if base_url and not re.fullmatch(r"https?://[A-Za-z0-9.\-]+(:[0-9]{1,5})?", base_url):
             raise ConfigError("MYVINYL_BASE_URL must look like https://myvinyl.example.com")
@@ -60,7 +72,7 @@ class Settings:
             password_hash=password_hash,
             db_path=db_path,
             admin_username=admin_username,
-            discogs_token=discogs_token,
+            token_key=token_key,
             refresh_days=_int_env("MYVINYL_REFRESH_DAYS", 7, 0, 365),
             backup_hours=_int_env("MYVINYL_BACKUP_HOURS", 24, 0, 24 * 30),
             backup_keep=_int_env("MYVINYL_BACKUP_KEEP", 14, 1, 1000),

@@ -15,7 +15,7 @@
   <h2>Users</h2>
   <div class="table-wrap">
   <table>
-    <thead><tr><th>User</th><th>Role</th><th class="num">Albums</th><th>Last login</th><th>Status</th><th></th></tr></thead>
+    <thead><tr><th>User</th><th>Role</th><th class="num">Albums</th><th>Last login</th><th>Status</th><th>Discogs token</th><th></th></tr></thead>
     <tbody>
       {% for u in users %}
       <tr>
@@ -39,6 +39,14 @@
         <td class="num">{{ u.album_count }}</td>
         <td>{{ u.last_login_at | eastern if u.last_login_at else "never" }}</td>
         <td>{{ "disabled" if u.disabled else "active" }}</td>
+        <td>
+          {% if u.discogs_token %}
+          <form class="inline" method="post" action="/admin/users/{{ u.id }}/discogs-token/clear">
+            <input type="hidden" name="csrf" value="{{ csrf }}">
+            set <button class="link danger-link" type="submit" aria-label="Clear the Discogs token of {{ u.username }}">Clear</button>
+          </form>
+          {% else %}<span class="muted">none</span>{% endif %}
+        </td>
         <td class="row-actions">
           <form method="post" action="/admin/view/{{ u.id }}">
             <input type="hidden" name="csrf" value="{{ csrf }}">
@@ -111,7 +119,7 @@
   <section class="panel">
     <h2>Server</h2>
     <dl class="facts">
-      <dt>Discogs token</dt><dd>{{ "configured (60 requests/min)" if has_token else "not set (25 requests/min)" }}</dd>
+      <dt>Discogs access</dt><dd>Each user's own token (60 requests/min), else anonymous (25/min). Discogs counts both per server, so users share them.</dd>
       <dt>Jobs waiting</dt><dd>{{ queued }}</dd>
     </dl>
   </section>

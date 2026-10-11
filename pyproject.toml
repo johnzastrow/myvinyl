@@ -12,6 +12,7 @@ dependencies = [
     "itsdangerous>=2.2",
     "argon2-cffi>=23.1",
     "tzdata>=2024.1",
+    "cryptography>=44",
 ]
 
 [project.scripts]

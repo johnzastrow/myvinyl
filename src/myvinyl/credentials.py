@@ -1,6 +1,7 @@
-"""Generate login credentials: `uv run python -m myvinyl.credentials`.
+"""Generate credentials: `uv run python -m myvinyl.credentials`.
 
 Prompts for a password (not echoed) and prints the environment variables to set.
+`--token-key` prints only a new MYVINYL_TOKEN_KEY (for upgrading an existing server).
 """
 
 import getpass
@@ -8,11 +9,15 @@ import secrets
 import sys
 
 from .auth import hash_password
+from .tokens import new_key
 
 MIN_PASSWORD_LEN = 12
 
 
 def main() -> int:
+    if sys.argv[1:] == ["--token-key"]:
+        print(f"MYVINYL_TOKEN_KEY={new_key()}")
+        return 0
     password = getpass.getpass("New password: ")
     if len(password) < MIN_PASSWORD_LEN:
         print(f"Password must be at least {MIN_PASSWORD_LEN} characters.", file=sys.stderr)
@@ -24,6 +29,7 @@ def main() -> int:
     print("\nSet these environment variables (keep them out of version control):\n")
     print(f"MYVINYL_SECRET_KEY={secrets.token_urlsafe(48)}")
     print(f"MYVINYL_PASSWORD_HASH={hash_password(password)}")
+    print(f"MYVINYL_TOKEN_KEY={new_key()}")
     return 0
 
 

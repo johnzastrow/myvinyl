@@ -51,6 +51,37 @@
   </form>
 </div>
 
+<section class="panel narrow" id="discogs">
+  <h2>Discogs token</h2>
+  {% if saved == "token" %}<p class="notice">Token saved. Your Discogs lookups, price checks, and imports now use it.</p>{% endif %}
+  {% if saved == "token_removed" %}<p class="notice">Token removed. Discogs lookups for your collection now use anonymous access.</p>{% endif %}
+  {% if token_hint %}
+  <p>Your token ending in <strong>&hellip;{{ token_hint }}</strong> is in use for your collection and wishlist.</p>
+  {% else %}
+  <p class="muted">No token yet. myvinyl still looks things up on Discogs without one, but slower (anonymous access is limited to 25 requests a minute for the whole site). A token raises that to 60.</p>
+  {% endif %}
+  <form method="post" action="/account/discogs-token">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <label for="discogs-key">{{ "Replace with a new token" if token_hint else "Personal access token" }}</label>
+    <input id="discogs-key" name="token" type="password" maxlength="100" autocomplete="off" spellcheck="false" required>
+    <p class="hint">On Discogs: Settings &rarr; Developers &rarr; <strong>Generate new token</strong>, then paste it here. It's checked with Discogs, stored encrypted, and only its last 4 characters are ever shown. Admins can't see it.</p>
+    {% if errors.discogs_key %}<p class="error">{{ errors.discogs_key }}</p>{% endif %}
+    <label for="key-current">Current password</label>
+    <input id="key-current" name="current" type="password" autocomplete="current-password" required>
+    {% if errors.key_current %}<p class="error">{{ errors.key_current }}</p>{% endif %}
+    <div class="actions"><button type="submit">Save token</button></div>
+  </form>
+  {% if token_hint %}
+  <form method="post" action="/account/discogs-token/delete">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <label for="key-remove-current">Current password</label>
+    <input id="key-remove-current" name="current" type="password" autocomplete="current-password" required>
+    {% if errors.key_remove_current %}<p class="error">{{ errors.key_remove_current }}</p>{% endif %}
+    <div class="actions"><button class="button-outline" type="submit">Remove token</button></div>
+  </form>
+  {% endif %}
+</section>
+
 <form class="panel narrow" method="post" action="/account/identity">
   <h2>Username and email</h2>
   {% if saved == "identity" %}<p class="notice">Saved. If you changed your username, use the new one next time you log in.</p>{% endif %}

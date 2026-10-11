@@ -14,6 +14,7 @@ from myvinyl.main import create_app
 PASSWORD = "correct horse battery"
 PNG = b"\x89PNG\r\n\x1a\n" + b"0" * 32
 PASSWORD_HASH = hash_password(PASSWORD)
+TOKEN_KEY = bytes(range(32))
 
 RELEASE = {
     "id": 28855534,
@@ -84,6 +85,9 @@ class FakeService:
         self.wish_calls = []
         self.image_urls = []
         self.image_error = False
+        self.used_tokens = []  # Discogs token behind each call ("" = anonymous)
+        self.identity_error = None
+        self.identity_name = "discogsfan"
 
     def enrich(self, artist, title, year, release_id=None):
         self.calls.append((artist, title, year))
@@ -113,11 +117,35 @@ class FakeService:
             return (release_id, *self.wish_price[1:])
         return self.wish_price
 
+    def identity(self):
+        if self.identity_error:
+            raise self.identity_error
+        return self.identity_name
+
     def fetch_image(self, url):
         self.image_urls.append(url)
         if self.image_error:
             raise ValueError("bad image")
         return PNG, "png"
+
+
+class TokenTagged:
+    """The shared fake service, recording which Discogs token each call ran with."""
+
+    def __init__(self, service, token):
+        self._service = service
+        self._token = token
+
+    def __getattr__(self, name):
+        attr = getattr(self._service, name)
+        if not callable(attr):
+            return attr
+
+        def call(*args, **kwargs):
+            self._service.used_tokens.append(self._token)
+            return attr(*args, **kwargs)
+
+        return call
 
 
 @pytest.fixture
@@ -128,10 +156,15 @@ def lookup():
 @pytest.fixture
 def client(tmp_path, lookup):
     settings = Settings(
-        secret_key="x" * 48, password_hash=PASSWORD_HASH, db_path=tmp_path / "test.db"
+        secret_key="x" * 48,
+        password_hash=PASSWORD_HASH,
+        db_path=tmp_path / "test.db",
+        token_key=TOKEN_KEY,
     )
     # https base URL so the Secure session cookie is sent back.
-    app = create_app(settings, service=lookup, inline_jobs=True)
+    app = create_app(
+        settings, inline_jobs=True, service_factory=lambda token: TokenTagged(lookup, token)
+    )
     with TestClient(app, base_url="https://testserver") as c:
         yield c
 
@@ -198,6 +231,7 @@ def test_logout(authed):
 
 
 def test_settings_fail_closed(monkeypatch):
+    monkeypatch.setenv("MYVINYL_TOKEN_KEY", "A" * 43 + "=")
     monkeypatch.delenv("MYVINYL_SECRET_KEY", raising=False)
     monkeypatch.setenv("MYVINYL_PASSWORD_HASH", PASSWORD_HASH)
     with pytest.raises(ConfigError):
