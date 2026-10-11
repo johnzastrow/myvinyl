@@ -1,57 +1,55 @@
 # TODO
 
-Backlog for myvinyl. Items marked **(decision)** need an answer before work starts.
+Backlog for myvinyl. Each item links to its GitHub issue, where discussion and progress
+happen: https://github.com/johnzastrow/myvinyl/issues. Labels: `in progress`,
+`decision needed` (an answer is needed before work starts), `idea` (not scheduled),
+`security`, `ops`.
+
+## In progress
+- [ ] Per-user Discogs tokens, entered in the web UI
+      ([#3](https://github.com/johnzastrow/myvinyl/issues/3)).
+  - Decided 2026-10-11: one token per user; no shared token. Users without a token use
+    Discogs' anonymous access (slower), and the Profile page explains how to add one.
+  - Encrypted at rest with AES-256-GCM (`cryptography` package), key in a separate
+    server setting; shown only as the last 4 characters; current password required to
+    change it; never logged.
+  - Background jobs use the album owner's token.
+  - Admins see and change every collection, never anyone's token, and can clear a
+    user's token.
 
 ## Next up
 
 ### Deployment
-Live since 2026-10-09 at https://myvinyl.fluidgrid.site (server `recipe.fluidgrid.site`,
-stack in `~/myvinyldocker`, container `myvinyl` on `127.0.0.1:8094`).
-- [x] DNS (already resolved via the existing fluidgrid.site records).
-- [x] Image built and running (healthy); HTTPS certificate issued by Caddy.
-- [x] Caddy site block in `/etc/caddy/Caddyfile` (previous file kept as
-      `/etc/caddy/Caddyfile.pre-myvinyl`).
-- [x] Generated admin password changed; `ADMIN_PASSWORD.txt` deleted.
-- [ ] Optional: set `MYVINYL_DISCOGS_TOKEN` in `~/myvinyldocker/.env`, then `docker compose up -d`.
-- [ ] Copy `/data/backups` off the server (cron + rsync or similar).
-- [ ] Optional: pin the Docker base images by digest.
+Live since 2026-10-09 at https://myvinyl.fluidgrid.site.
+- [ ] Copy automatic backups off the server
+      ([#6](https://github.com/johnzastrow/myvinyl/issues/6)).
+- [ ] Pin the Docker base images by digest
+      ([#7](https://github.com/johnzastrow/myvinyl/issues/7)).
 
-### Discogs token per user
-Decided 2026-10-11: one token per user, entered in the web UI instead of `.env`.
-- [ ] Profile page field for the user's own Discogs personal access token; that user's
-      lookups, price checks, and imports use it (their own Discogs rate limit).
-- [ ] Treat it as a secret: encrypted at rest with AES-256-GCM from the standard
-      `cryptography` package (key in a new `.env` setting, kept apart from the database;
-      losing the key means users re-enter their tokens), shown only as the last 4
-      characters, current password required to set, change, or remove it, never logged.
-- [ ] Background jobs (weekly refresh, wishlist checks) run with the album owner's token.
-- [ ] No shared token: remove `MYVINYL_DISCOGS_TOKEN`. A user without a token gets no
-      Discogs lookups, prices, or imports, and the UI says how to add one.
-- [ ] Admins keep seeing and changing every collection, as today, but never see anyone's
-      token.
-- [ ] Admins can clear any user's token (for example after a leak); they never see it.
+### Security
+- [ ] (decision) Second factor (TOTP), or Caddy forward-auth, or a VPN
+      ([#4](https://github.com/johnzastrow/myvinyl/issues/4)).
+- [ ] Re-run the security review after major changes; `pip-audit` on dependency bumps
+      ([#8](https://github.com/johnzastrow/myvinyl/issues/8)).
 
-### Security follow-ups (see SECURITY.md)
-- [ ] (decision) Second factor (TOTP), or put the site behind Caddy forward-auth or a VPN.
-- [ ] Re-run the security review after major changes; run `pip-audit` on dependency bumps.
-
-### Email (decision)
-- [ ] Send email through SMTP2GO: invite links sent by email, self-service password
-      reset, wishlist price alerts. Needs an SMTP2GO account, a verified sender domain
-      (SPF/DKIM on fluidgrid.site), and the API key or SMTP credentials in `.env`.
-      Accounts already have an optional, unique `email` field (0.6.1).
+### Email
+- [ ] (decision) Send email through SMTP2GO: invites, password reset, price alerts
+      ([#5](https://github.com/johnzastrow/myvinyl/issues/5)).
 
 ## Ideas, not scheduled
-- Condition-based price suggestions from Discogs (token, possibly seller settings).
-- Separate sleeve grade (Goldmine grades record and sleeve separately).
-- Report as a downloadable PDF (today: browser Print to PDF).
-- CSV import.
-- Shelf location and duplicate copies.
-- Pagination for very large collections.
-- Read-only sharing of a collection with people who have no account.
-- Collection-wide value history chart.
+- Condition-based price suggestions from Discogs ([#9](https://github.com/johnzastrow/myvinyl/issues/9)).
+- Separate sleeve grade ([#10](https://github.com/johnzastrow/myvinyl/issues/10)).
+- Reports as a downloadable PDF ([#11](https://github.com/johnzastrow/myvinyl/issues/11)).
+- CSV import ([#12](https://github.com/johnzastrow/myvinyl/issues/12)).
+- Shelf location and duplicate copies ([#13](https://github.com/johnzastrow/myvinyl/issues/13)).
+- Pagination for very large collections ([#14](https://github.com/johnzastrow/myvinyl/issues/14)).
+- Read-only sharing of a collection ([#15](https://github.com/johnzastrow/myvinyl/issues/15)).
+- Collection-wide value history chart ([#16](https://github.com/johnzastrow/myvinyl/issues/16)).
 
 ## Done
+- 0.7.0: upload your own cover ([#1](https://github.com/johnzastrow/myvinyl/issues/1));
+  edit the barcode or catalog number ([#2](https://github.com/johnzastrow/myvinyl/issues/2)).
+- 0.6.1: change usernames, optional email per account, version footer, user guide.
 - 0.6.0: multiple users with admin, invite links, and profiles; five themes; trash with
   restore; purchase tracking and gain/loss; dated notes; wishlist with wantlist import;
   cover grid; filters; stats; printed reports; saved covers; automatic backups; Docker and
