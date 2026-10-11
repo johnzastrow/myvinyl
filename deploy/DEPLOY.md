@@ -36,7 +36,8 @@ docker compose run --rm myvinyl python -m myvinyl.credentials
 
 The last command asks for the admin password (12+ characters) and prints
 `MYVINYL_SECRET_KEY` and `MYVINYL_PASSWORD_HASH`. Paste both into `.env`, keeping single
-quotes around the hash. Add `MYVINYL_DISCOGS_TOKEN` if you have one.
+quotes around the hash, and `MYVINYL_TOKEN_KEY`. Users add their own Discogs tokens on
+their Profile page.
 
 ## 4. Start
 
@@ -90,6 +91,14 @@ docker compose up -d --build
 
 The database is upgraded automatically on startup. Take a backup first (below).
 
+**Upgrading to 0.8.0:** add a token key to `.env` before updating, or the app won't start:
+
+```bash
+docker compose run --rm myvinyl python -m myvinyl.credentials --token-key >> .env
+```
+
+Remove `MYVINYL_DISCOGS_TOKEN` from `.env`; each user now enters their own token.
+
 ## Backups
 
 - myvinyl writes a backup every 24 hours (keeping 14) to `/data/backups` inside the
@@ -109,6 +118,7 @@ docker compose cp myvinyl:/data/backups ./backups-$(date +%F)
 - The app port is bound to `127.0.0.1`, so only Caddy can reach it. Don't change it to
   `0.0.0.0` or remove the `127.0.0.1:` prefix: that would expose plain HTTP and make the
   `FORWARDED_ALLOW_IPS="*"` setting unsafe.
-- `.env` holds the session key and Discogs token. Keep it `chmod 600`, out of git (it is in
-  `.gitignore`), and out of backups that leave the server unencrypted.
+- `.env` holds the session key and the token encryption key. Keep it `chmod 600`, out of
+  git (it is in `.gitignore`), and out of backups that leave the server unencrypted. Keep
+  `MYVINYL_TOKEN_KEY` and database backups in separate places.
 - Consider a firewall (for example `ufw allow 80,443/tcp` plus SSH only).

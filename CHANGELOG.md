@@ -2,6 +2,31 @@
 
 All notable changes to myvinyl. Versions follow [semantic versioning](https://semver.org/).
 
+## 0.8.0 - 2026-10-11
+
+### Changed
+- **Per-user Discogs tokens** ([#3](https://github.com/johnzastrow/myvinyl/issues/3)).
+  Profile → **Discogs token**: add, replace, or remove your own token (current password
+  required). It is checked with Discogs, stored encrypted (AES-256-GCM), and only its last
+  4 characters are shown. Your lookups, refreshes, wishlist price checks, imports, barcode
+  searches, and covers use it. Without a token, myvinyl uses Discogs' anonymous access
+  (slower). Your Discogs username fills in from the token if it was blank.
+- Admin **Users** table shows whether each user has a token, with **Clear** (logged).
+  Admins can't see tokens.
+- Discogs requests share one pace per kind (token / anonymous), because Discogs counts its
+  limits per server, not per token.
+
+### Removed
+- `MYVINYL_DISCOGS_TOKEN` (the shared server token). If still set, it is ignored with a
+  warning.
+
+### Upgrade notes
+- **New required setting `MYVINYL_TOKEN_KEY`.** Generate it before updating:
+  `docker compose run --rm myvinyl python -m myvinyl.credentials --token-key >> .env`.
+  Keep a copy: if the key is lost or changed, users must enter their tokens again.
+- A `users.discogs_token` column is added automatically on startup.
+- New dependency: `cryptography`.
+
 ## 0.7.0 - 2026-10-11
 
 ### Added

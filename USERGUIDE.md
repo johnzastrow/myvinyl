@@ -101,9 +101,10 @@ Notes:
 - myvinyl backs up the database every 24 hours and keeps the last 14.
 - **Admin** → **Back up now** makes one immediately; the list shows the latest files.
 
-### Discogs token
-The **Server** panel shows whether a Discogs token is set. With a token, lookups run
-about twice as fast. Setting it requires server access (Part 3).
+### Discogs tokens
+Each user adds their own token on their Profile page. The **Users** table shows
+**set** or **none** per user; **Clear** removes a user's token (for example if it leaked).
+Admins can never see a token.
 
 ---
 
@@ -125,7 +126,7 @@ Server `recipe.fluidgrid.site`, user `jcz`. Everything lives in `~/myvinyldocker
 ### Settings in `.env`
 | Setting | Purpose |
 |---|---|
-| `MYVINYL_DISCOGS_TOKEN` | Shared Discogs token ([how to get one](README.md#getting-a-discogs-token)). |
+| `MYVINYL_TOKEN_KEY` | Encrypts users' Discogs tokens. Required. Keep a copy somewhere safe: if it's lost or changed, everyone has to enter their token again. |
 | `MYVINYL_REFRESH_DAYS` | Days between automatic price checks (default 7). |
 | `MYVINYL_BACKUP_HOURS` / `MYVINYL_BACKUP_KEEP` | Backup interval and count (defaults 24 and 14). |
 | `MYVINYL_TRASH_DAYS` | Days before trashed albums are purged (default 30). |

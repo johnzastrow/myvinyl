@@ -154,7 +154,7 @@ the password hash contains `$` characters:
 ```powershell
 $env:MYVINYL_SECRET_KEY    = '<printed value>'
 $env:MYVINYL_PASSWORD_HASH = '<printed value>'
-$env:MYVINYL_DISCOGS_TOKEN = '<your token>'    # optional, see below
+$env:MYVINYL_TOKEN_KEY     = '<printed value>'
 uv run myvinyl
 ```
 
@@ -173,7 +173,7 @@ malformed, rather than running with weak defaults.
 | `MYVINYL_SECRET_KEY` | *(required)* | Signs session cookies. 32+ characters; `myvinyl.credentials` generates one. |
 | `MYVINYL_PASSWORD_HASH` | *(first run)* | Argon2id hash for the first admin. Only used when the database has no accounts yet. |
 | `MYVINYL_ADMIN_USER` | `admin` | Username for that first admin. |
-| `MYVINYL_DISCOGS_TOKEN` | *(none)* | Shared Discogs personal token for the whole server: 60 requests/min instead of 25. |
+| `MYVINYL_TOKEN_KEY` | *(required)* | Encrypts the Discogs tokens users enter on their Profile page (32 bytes, base64). `myvinyl.credentials` generates one; `--token-key` prints only this. Back it up apart from the database. |
 | `MYVINYL_DB` | `myvinyl.db` | SQLite database path. Covers and backups are stored next to it. |
 | `MYVINYL_BASE_URL` | *(from request)* | Public address for invite links, e.g. `https://myvinyl.fluidgrid.site`. |
 | `MYVINYL_REFRESH_DAYS` | `7` | Re-check prices older than this many days (`0` = off). |
@@ -188,21 +188,25 @@ and backups.
 
 ## Getting a Discogs token
 
-myvinyl works without a token. With one, the Discogs API allows 60 requests per minute
-instead of 25, so lookups finish about twice as fast: about 12 seconds per album instead of
-about 30. **One token serves the whole server.** Users don't need their own.
+myvinyl works without a token, using Discogs' anonymous access. **Each user can add
+their own token** on the Profile page (since 0.8.0); their lookups, price checks, imports,
+and covers then use it. With a token the Discogs API allows 60 requests per minute instead
+of 25, so lookups finish about twice as fast. Discogs counts both limits per server, so all
+users share them; myvinyl paces its requests to stay under them.
 
 1. **Create a free Discogs account** at <https://www.discogs.com/users/create>, or log in.
 2. **Open the developer settings:** avatar (top right) → **Settings** → **Developers**,
    or go directly to <https://www.discogs.com/settings/developers>.
 3. **Click "Generate new token"** and copy the long string of letters and numbers.
-4. **Set it as `MYVINYL_DISCOGS_TOKEN`** and restart myvinyl. The admin page shows whether
-   a token is configured.
+4. **In myvinyl, open Profile → Discogs token,** paste it, enter your current password, and
+   **Save token**. myvinyl checks it with Discogs first.
 
 Notes:
 
-- **Treat the token like a password.** It is tied to your Discogs account. myvinyl only
-  sends it to `api.discogs.com` in the `Authorization` header, and never logs or displays it.
+- **Treat the token like a password.** It is tied to your Discogs account. myvinyl stores
+  it encrypted (AES-256-GCM, key in `MYVINYL_TOKEN_KEY`), sends it only to
+  `api.discogs.com` in the `Authorization` header, never logs it, and shows only its last
+  4 characters. Admins can see that a user has a token and clear it, but can't read it.
 - **To revoke it,** generate a new token on the same page; that invalidates the old one.
 - **Importing someone's collection or wantlist** needs only their Discogs username, as long
   as their collection is public (Discogs → Settings → Privacy). The token owner's own
@@ -371,6 +375,11 @@ myvinyl/
 ## Changelog
 
 The full history is in [CHANGELOG.md](CHANGELOG.md).
+
+### 0.8.0 - 2026-10-11
+- **Changed:** each user enters their own Discogs token on the Profile page (#3). Tokens
+  are encrypted at rest; the shared `MYVINYL_DISCOGS_TOKEN` setting is gone. New required
+  setting `MYVINYL_TOKEN_KEY`.
 
 ### 0.7.0 - 2026-10-11
 - **Added:** upload your own cover image (#1); edit an album's barcode or catalog number,
