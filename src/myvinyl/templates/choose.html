@@ -19,7 +19,7 @@
         <td>{{ m.catno }}</td>
         <td class="wrap">{{ m.formats }} <a class="small" href="https://www.discogs.com/release/{{ m.release_id }}" target="_blank" rel="noopener noreferrer">details</a></td>
         <td>
-          <form method="post" action="/albums">
+          <form method="post" action="{{ action }}">
             <input type="hidden" name="csrf" value="{{ csrf }}">
             <input type="hidden" name="release_id" value="{{ m.release_id }}">
             <input type="hidden" name="identifier" value="{{ identifier }}">
@@ -27,7 +27,8 @@
             {% for key in ["artist", "title", "label", "year"] %}
             <input type="hidden" name="{{ key }}" value="{{ form.get(key) if (form.get(key) or '') | trim else (m[key] or '') }}">
             {% endfor %}
-            <input type="hidden" name="format" value="{{ m.format }}">
+            {# A new album takes the pressing's format; an edit keeps the one you chose. #}
+            <input type="hidden" name="format" value="{{ form.get('format') if edit else m.format }}">
             {% for key in ["condition", "notes", "value", "purchase_price", "purchase_date", "purchased_from"] %}
             <input type="hidden" name="{{ key }}" value="{{ form.get(key, '') }}">
             {% endfor %}
@@ -39,6 +40,6 @@
     </tbody>
   </table>
   </div>
-  <p class="actions"><a href="/albums/new">Start over</a></p>
+  <p class="actions"><a href="{{ action ~ '/edit' if edit else '/albums/new' }}">{{ "Back to editing" if edit else "Start over" }}</a></p>
 </section>
 {% endblock %}

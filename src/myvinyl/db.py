@@ -619,6 +619,12 @@ def update_album(path: Path, album_id: int, data: dict, value_source: str | None
         return cur.rowcount == 1
 
 
+def set_identifier(path: Path, album_id: int, identifier: str) -> None:
+    """Store the barcode or catalog number you entered."""
+    with connect(path) as conn:
+        conn.execute("UPDATE albums SET identifier = ? WHERE id = ?", (identifier, album_id))
+
+
 def album_for_release(path: Path, owner_id: int, release_id: int):
     """A live album of this owner already pinned to this release (import de-duplication)."""
     with connect(path) as conn:

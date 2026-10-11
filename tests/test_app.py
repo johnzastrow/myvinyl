@@ -562,6 +562,63 @@ def test_barcode_several_matches_lets_you_choose(authed, lookup, tmp_path):
     assert album["discogs_release_id"] == 28848151 and album["notes"] == "gift"
 
 
+def test_edit_shows_and_changes_barcode(authed, lookup, tmp_path):
+    lookup.identifier_matches = [MATCH]
+    r = add(authed, artist="New Order", title="Substance", identifier="111")
+    link = r.headers["location"]
+    assert 'name="identifier" type="text" value="111"' in authed.get(link + "/edit").text
+
+    # Unchanged: no new lookup, pressing untouched.
+    lookup.identifier = None
+    edit(authed, link, artist="New Order", title="Substance", identifier="111", format="LP")
+    assert lookup.identifier is None
+
+    # Changed to a barcode with one pressing: pinned, your fields and format kept.
+    lookup.identifier_matches = [{**MATCH, "release_id": 28848151}]
+    lookup.calls.clear()
+    r = edit(authed, link, artist="NO", title="Substance", identifier="0190295928889")
+    assert r.status_code == 303 and lookup.identifier == "0190295928889"
+    album = db.get_album(tmp_path / "test.db", album_id_of(link))
+    assert album["identifier"] == "0190295928889" and album["artist"] == "NO"
+    assert album["discogs_release_id"] == 28848151 and album["pressing_locked"] == 1
+    assert album["format"] == "LP" and lookup.pinned == 28848151 and lookup.calls
+
+    # Cleared: stored blank, pressing kept.
+    edit(authed, link, identifier="")
+    album = db.get_album(tmp_path / "test.db", album_id_of(link))
+    assert album["identifier"] == "" and album["discogs_release_id"] == 28848151
+
+
+def test_edit_barcode_several_matches_lets_you_choose(authed, lookup, tmp_path):
+    r = add(authed, artist="New Order", title="Substance")
+    link = r.headers["location"]
+    other = {**MATCH, "release_id": 28848151}
+    lookup.identifier_matches = [MATCH, other]
+    r = edit(authed, link, artist="New Order", title="Substance", identifier="Fact 200", notes="x")
+    assert r.status_code == 200 and "Which pressing is yours?" in r.text
+    forms = re.findall(rf'<form method="post" action="{link}">(.*?)</form>', r.text, re.S)
+    data = dict(re.findall(r'name="([^"]+)" value="([^"]*)"', forms[1]))
+    data = {k: html.unescape(v) for k, v in data.items()}
+    assert data["format"] == "LP"  # your format, not the pressing's
+    r = authed.post(link, data=data, follow_redirects=False)
+    assert r.status_code == 303
+    album = db.get_album(tmp_path / "test.db", album_id_of(link))
+    assert album["discogs_release_id"] == 28848151 and album["pressing_locked"] == 1
+    assert album["identifier"] == "Fact 200" and album["notes"] == "x"
+
+
+def test_edit_barcode_errors_save_nothing(authed, lookup, tmp_path):
+    r = add(authed, artist="New Order", title="Substance")
+    link = r.headers["location"]
+    lookup.identifier_matches = []
+    r = edit(authed, link, artist="Changed", title="Substance", identifier="999")
+    assert r.status_code == 422 and "No vinyl release on Discogs" in r.text
+    r = edit(authed, link, artist="Changed", title="Substance", identifier="<x>")
+    assert r.status_code == 422 and "letters, digits" in r.text
+    album = db.get_album(tmp_path / "test.db", album_id_of(link))
+    assert album["artist"] == "New Order" and album["identifier"] == ""
+
+
 def test_barcode_errors(authed, lookup):
     lookup.identifier_matches = []
     r = add(authed, identifier="123456")

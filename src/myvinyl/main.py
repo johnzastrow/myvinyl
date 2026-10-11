@@ -809,6 +809,47 @@ def create_app(
 
     # --- Albums ------------------------------------------------------------------------
 
+    async def match_identifier(request, identifier, raw, album=None):
+        """Find the pressing for a barcode or catalog number.
+
+        Returns the single Discogs match after filling the blanks in `raw` from it, or a
+        response to send instead: the form with an error, or the page for choosing among
+        several pressings. `album` is set when editing an existing album.
+        """
+        try:
+            matches = await run_in_threadpool(service.find_by_identifier, identifier)
+        except discogs.LOOKUP_ERRORS as exc:
+            log.warning("Discogs identifier search failed: %s", exc)
+            matches = None
+        album_id = album["id"] if album else None
+        if not matches:
+            _, values, _ = parse_album(raw)
+            values["identifier"] = identifier
+            message = (
+                "Discogs could not be reached. Try again, or leave this blank."
+                if matches is None
+                else "No vinyl release on Discogs has that barcode or catalog number."
+            )
+            return album_form(
+                request, album_id, values, {"identifier": message}, status_code=422, album=album
+            )
+        if len(matches) > 1:
+            return render(
+                request,
+                "choose.html",
+                identifier=identifier,
+                matches=matches,
+                form=raw,
+                action=f"/albums/{album_id}" if album_id else "/albums",
+                edit=album_id is not None,
+            )
+        match = matches[0]
+        # Fill only what you left blank.
+        for key in ("artist", "title", "label", "year"):
+            if not str(raw.get(key, "")).strip() and match[key]:
+                raw[key] = str(match[key])
+        return match
+
     @router.get("/albums/new")
     async def new_album(request: Request):
         return album_form(request)
@@ -828,34 +869,12 @@ def create_app(
             )
 
         if identifier and release_id is None:
-            # Exact match by barcode or catalog number.
-            try:
-                matches = await run_in_threadpool(service.find_by_identifier, identifier)
-            except discogs.LOOKUP_ERRORS as exc:
-                log.warning("Discogs identifier search failed: %s", exc)
-                matches = None
-            if not matches:
-                _, values, _ = parse_album(raw)
-                values["identifier"] = identifier
-                message = (
-                    "Discogs could not be reached. Try again, or leave this blank."
-                    if matches is None
-                    else "No vinyl release on Discogs has that barcode or catalog number."
-                )
-                return album_form(
-                    request, values=values, errors={"identifier": message}, status_code=422
-                )
-            if len(matches) > 1:
-                return render(
-                    request, "choose.html", identifier=identifier, matches=matches, form=raw
-                )
-            match = matches[0]
+            match = await match_identifier(request, identifier, raw)
+            if isinstance(match, Response):
+                return match
             release_id = match["release_id"]
-            # Fill only what you left blank; format comes from the release itself because
-            # the form's format menu always has a value.
-            for key in ("artist", "title", "label", "year"):
-                if not str(raw.get(key, "")).strip() and match[key]:
-                    raw[key] = str(match[key])
+            # Format comes from the release itself because the form's format menu always
+            # has a value.
             raw["format"] = match["format"]
 
         data, values, errors = parse_album(raw)
@@ -920,14 +939,33 @@ def create_app(
     @router.get("/albums/{album_id}/edit")
     async def edit_album(request: Request, album_id: int):
         album = album_access(request, album_id)
-        return album_form(request, album_id=album_id, values=album_to_values(album), album=album)
+        values = {**album_to_values(album), "identifier": album["identifier"]}
+        return album_form(request, album_id=album_id, values=values, album=album)
 
     @router.post("/albums/{album_id}")
     async def update_album(request: Request, album_id: int):
         form = await checked_form(request)
         album = album_access(request, album_id)
-        data, values, errors = parse_album(form)
+        identifier, id_error = parse_identifier(form.get("identifier"))
+        # Set when you picked one of several pressings on the choose page.
+        release_id = positive_int(form.get("release_id"))
+        raw = dict(form)
+        if id_error:
+            _, values, errors = parse_album(raw)
+            values["identifier"] = str(form.get("identifier", ""))[:60]
+            errors["identifier"] = id_error
+            return album_form(request, album_id, values, errors, status_code=422, album=album)
+
+        if identifier and identifier != album["identifier"] and release_id is None:
+            # A new barcode or catalog number: find the pressing again, as on Add.
+            match = await match_identifier(request, identifier, raw, album=album)
+            if isinstance(match, Response):
+                return match
+            release_id = match["release_id"]
+
+        data, values, errors = parse_album(raw)
         if errors:
+            values["identifier"] = identifier
             return album_form(request, album_id, values, errors, status_code=422, album=album)
         if data["value_cents"] is None:
             source = None  # cleared: the next Discogs lookup may fill it
@@ -936,6 +974,14 @@ def create_app(
         else:
             source = "manual"  # you overrode the value; lookups won't replace it
         db.update_album(path, album_id, data, source)
+        db.set_identifier(path, album_id, identifier)
+        repinned = release_id is not None and (
+            release_id != album["discogs_release_id"] or not album["pressing_locked"]
+        )
+        if repinned:
+            # Pin the new pressing and refresh its value, details, and cover.
+            db.set_pressing(path, album_id, release_id)
+            queue_album(album_id)
         return RedirectResponse(f"/albums/{album_id}", status_code=303)
 
     @router.post("/albums/{album_id}/lookup")
