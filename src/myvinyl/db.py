@@ -27,6 +27,7 @@ CREATE TABLE IF NOT EXISTS users (
     discogs_username TEXT NOT NULL DEFAULT '',
     email           TEXT,             -- optional; for future email features (SMTP2GO)
     discogs_token   TEXT,             -- the user's Discogs token, AES-GCM encrypted
+    discogs_linked  TEXT,             -- Discogs username that token belongs to
     created_at      TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     last_login_at   TEXT
 );
@@ -75,9 +76,70 @@ CREATE TABLE IF NOT EXISTS albums (
     styles TEXT NOT NULL DEFAULT '',
     cover_file TEXT,            -- locally saved copy of the displayed cover
     cover_custom INTEGER NOT NULL DEFAULT 0,  -- 1 = you uploaded the cover
+    sleeve_condition TEXT NOT NULL DEFAULT '',  -- graded separately; '' = not graded
+    discogs_full_pending INTEGER NOT NULL DEFAULT 0,  -- light lookup only so far
+    -- Link to a copy in your Discogs collection (one album per Discogs instance).
+    discogs_instance_id INTEGER,
+    discogs_folder_id INTEGER,
+    discogs_added_at TEXT,      -- when it was added on Discogs (UTC)
+    discogs_sync_run INTEGER,   -- last sync run that saw it on Discogs
+    discogs_snapshot TEXT,      -- JSON: your fields as Discogs had them last sync
     created_at  TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at  TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Folders of each user's Discogs collection (names as on Discogs).
+CREATE TABLE IF NOT EXISTS discogs_folders (
+    owner_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    folder_id INTEGER NOT NULL,
+    name      TEXT NOT NULL,
+    PRIMARY KEY (owner_id, folder_id)
+);
+
+-- One row per Discogs collection sync. `page` is the next page to fetch, so an
+-- interrupted sync can resume.
+CREATE TABLE IF NOT EXISTS sync_runs (
+    id          INTEGER PRIMARY KEY,
+    owner_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    state       TEXT NOT NULL DEFAULT 'running',  -- running, done, error, interrupted
+    condition   TEXT NOT NULL,                    -- for copies Discogs has no grade for
+    page        INTEGER NOT NULL DEFAULT 1,
+    pages       INTEGER,
+    added       INTEGER NOT NULL DEFAULT 0,
+    updated     INTEGER NOT NULL DEFAULT 0,
+    linked      INTEGER NOT NULL DEFAULT 0,
+    unchanged   INTEGER NOT NULL DEFAULT 0,
+    skipped     INTEGER NOT NULL DEFAULT 0,
+    message     TEXT NOT NULL DEFAULT '',
+    started_at  TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    finished_at TEXT
+);
+CREATE INDEX IF NOT EXISTS ix_sync_runs_owner ON sync_runs (owner_id, id);
+
+-- Things a sync wants you to decide: a copy gone from Discogs, or a field changed in
+-- both places.
+CREATE TABLE IF NOT EXISTS sync_items (
+    id          INTEGER PRIMARY KEY,
+    owner_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    album_id    INTEGER NOT NULL REFERENCES albums(id) ON DELETE CASCADE,
+    kind        TEXT NOT NULL,              -- 'removal' or 'conflict'
+    field       TEXT NOT NULL DEFAULT '',   -- for conflicts
+    theirs      TEXT,                       -- Discogs' value (JSON)
+    created_at  TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (album_id, kind, field)
+);
+
+-- What each sync did, for the review page.
+CREATE TABLE IF NOT EXISTS sync_log (
+    id         INTEGER PRIMARY KEY,
+    owner_id   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    run_id     INTEGER,
+    album_id   INTEGER REFERENCES albums(id) ON DELETE SET NULL,
+    action     TEXT NOT NULL,
+    detail     TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS ix_sync_log_owner ON sync_log (owner_id, id);
 
 -- Full Discogs release record for the chosen pressing, kept as raw JSON.
 CREATE TABLE IF NOT EXISTS discogs_releases (
@@ -178,6 +240,13 @@ MIGRATIONS = {
     "styles": "TEXT NOT NULL DEFAULT ''",
     "cover_file": "TEXT",
     "cover_custom": "INTEGER NOT NULL DEFAULT 0",
+    "sleeve_condition": "TEXT NOT NULL DEFAULT ''",
+    "discogs_full_pending": "INTEGER NOT NULL DEFAULT 0",
+    "discogs_instance_id": "INTEGER",
+    "discogs_folder_id": "INTEGER",
+    "discogs_added_at": "TEXT",
+    "discogs_sync_run": "INTEGER",
+    "discogs_snapshot": "TEXT",
 }
 
 # Columns added to `users` after it was introduced.
@@ -188,6 +257,7 @@ USER_MIGRATIONS = {
     "discogs_username": "TEXT NOT NULL DEFAULT ''",
     "email": "TEXT",
     "discogs_token": "TEXT",
+    "discogs_linked": "TEXT",
 }
 
 _condition_rank = " ".join(f"WHEN '{c}' THEN {i}" for i, c in enumerate(CONDITIONS))
@@ -245,6 +315,12 @@ def init(path: Path) -> None:
             " WHERE email IS NOT NULL"
         )
         conn.execute("CREATE INDEX IF NOT EXISTS ix_albums_owner ON albums (owner_id, deleted_at)")
+        conn.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS ux_albums_instance"
+            " ON albums (owner_id, discogs_instance_id) WHERE discogs_instance_id IS NOT NULL"
+        )
+        # A sync cut off by a restart can be resumed from the page it reached.
+        conn.execute("UPDATE sync_runs SET state = 'interrupted' WHERE state = 'running'")
         # Lookups run in the background; any left 'pending' were cut off by a restart.
         conn.execute("UPDATE albums SET discogs_status = 'error' WHERE discogs_status = 'pending'")
         conn.execute(
@@ -362,10 +438,16 @@ def set_identity(path: Path, user_id: int, username: str, email: str | None) -> 
     return ""
 
 
-def set_discogs_token(path: Path, user_id: int, sealed: str | None) -> None:
-    """Store a user's encrypted Discogs token, or (None) remove it."""
+def set_discogs_token(
+    path: Path, user_id: int, sealed: str | None, linked: str | None = None
+) -> None:
+    """Store a user's encrypted Discogs token and the Discogs account it belongs to, or
+    (None) remove both."""
     with connect(path) as conn:
-        conn.execute("UPDATE users SET discogs_token = ? WHERE id = ?", (sealed, user_id))
+        conn.execute(
+            "UPDATE users SET discogs_token = ?, discogs_linked = ? WHERE id = ?",
+            (sealed, linked if sealed else None, user_id),
+        )
 
 
 def set_discogs_username_if_blank(path: Path, user_id: int, username: str) -> None:
@@ -480,6 +562,7 @@ class Filters:
     min_rating: float | None = None
     min_value: int | None = None  # cents
     max_value: int | None = None
+    folder: int | None = None  # Discogs folder id
 
     @property
     def active(self) -> bool:
@@ -519,6 +602,9 @@ def _where(owner_id: int, f: Filters) -> tuple[str, list]:
     if f.max_value is not None:
         clauses.append("value_cents <= ?")
         params.append(f.max_value)
+    if f.folder is not None:
+        clauses.append("discogs_folder_id = ?")
+        params.append(f.folder)
     return " AND ".join(clauses), params
 
 
@@ -575,7 +661,7 @@ def filter_options(path: Path, owner_id: int) -> dict:
         key=str.casefold,
     )
     decades = sorted({r["year"] // 10 * 10 for r in rows if r["year"]})
-    return {"genres": genres, "decades": decades}
+    return {"genres": genres, "decades": decades, "folders": used_folders(path, owner_id)}
 
 
 def get_album(path: Path, album_id: int, include_deleted: bool = False):
@@ -603,8 +689,8 @@ def create_album(
         cur = conn.execute(
             "INSERT INTO albums (owner_id, artist, title, year, label, format, condition, notes,"
             " value_cents, value_source, discogs_release_id, pressing_locked, identifier,"
-            " rating, purchase_cents, purchase_date, purchased_from)"
-            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            " rating, purchase_cents, purchase_date, purchased_from, sleeve_condition)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             [
                 owner_id,
                 *(data[c] for c in COLUMNS),
@@ -614,6 +700,7 @@ def create_album(
                 identifier,
                 rating,
                 *purchase,
+                data.get("sleeve_condition") or "",
             ],
         )
         return cur.lastrowid
@@ -624,13 +711,14 @@ def update_album(path: Path, album_id: int, data: dict, value_source: str | None
         cur = conn.execute(
             "UPDATE albums SET artist = ?, title = ?, year = ?, label = ?, format = ?,"
             " condition = ?, notes = ?, value_cents = ?, value_source = ?,"
-            " purchase_cents = ?, purchase_date = ?, purchased_from = ?,"
+            " purchase_cents = ?, purchase_date = ?, purchased_from = ?, sleeve_condition = ?,"
             " updated_at = CURRENT_TIMESTAMP WHERE id = ? AND deleted_at IS NULL",
             [
                 *(data[c] for c in COLUMNS),
                 value_source,
                 *(data.get(c) for c in PURCHASE_COLUMNS[:2]),
                 data.get("purchased_from") or "",
+                data.get("sleeve_condition") or "",
                 album_id,
             ],
         )
@@ -809,7 +897,7 @@ def _names(release: dict, key: str) -> str:
     return "|".join(items[:10])
 
 
-def save_enrichment(path: Path, album_id: int, e) -> None:
+def save_enrichment(path: Path, album_id: int, e, full: bool = True) -> None:
     """Store a Discogs lookup atomically.
 
     The value is only set when you have not entered one yourself, and label/year are only
@@ -838,7 +926,7 @@ def save_enrichment(path: Path, album_id: int, e) -> None:
             " value_source = CASE WHEN value_source = 'manual' THEN 'manual'"
             "                     WHEN ? IS NULL THEN NULL ELSE 'discogs' END,"
             " label = CASE WHEN label = '' THEN ? ELSE label END,"
-            " year = COALESCE(year, ?), genres = ?, styles = ?"
+            " year = COALESCE(year, ?), genres = ?, styles = ?, discogs_full_pending = ?"
             " WHERE id = ?",
             (
                 e.release_id,
@@ -851,6 +939,7 @@ def save_enrichment(path: Path, album_id: int, e) -> None:
                 year,
                 _names(release, "genres"),
                 _names(release, "styles"),
+                0 if full else 1,
                 album_id,
             ),
         )
@@ -914,9 +1003,11 @@ def due_for_refresh(path: Path, days: int, limit: int) -> list[int]:
         rows = conn.execute(
             "SELECT id FROM albums WHERE deleted_at IS NULL"
             " AND COALESCE(discogs_status, '') != 'pending'"
-            " AND (discogs_checked_at IS NULL OR discogs_checked_at < datetime('now', ?))"
+            " AND (discogs_checked_at IS NULL OR discogs_checked_at < datetime('now', ?)"
+            "      OR discogs_full_pending = 1)"
             " AND owner_id NOT IN (SELECT id FROM users WHERE disabled = 1)"
-            " ORDER BY discogs_checked_at IS NOT NULL, discogs_checked_at LIMIT ?",
+            " ORDER BY discogs_full_pending DESC, discogs_checked_at IS NOT NULL,"
+            " discogs_checked_at LIMIT ?",
             (f"-{int(days)} days", int(limit)),
         ).fetchall()
     return [row["id"] for row in rows]
@@ -1037,3 +1128,242 @@ def stats(path: Path, owner_id: int, filters: Filters = Filters()) -> dict:  # n
             key=lambda a: -a["value_cents"],
         )[:10],
     }
+
+
+# --- Discogs collection sync -----------------------------------------------------------------
+
+# Columns of sync_runs that update_sync_run may set (fixed names, never user input).
+SYNC_RUN_COLUMNS = {"state", "page", "pages", "message"}
+SYNC_COUNTERS = {"added", "updated", "linked", "unchanged", "skipped"}
+
+
+def set_discogs_folders(path: Path, owner_id: int, folders: list[dict]) -> None:
+    with connect(path) as conn:
+        conn.execute("DELETE FROM discogs_folders WHERE owner_id = ?", (owner_id,))
+        conn.executemany(
+            "INSERT INTO discogs_folders (owner_id, folder_id, name) VALUES (?, ?, ?)",
+            [(owner_id, f["id"], f["name"]) for f in folders],
+        )
+
+
+def folder_names(path: Path, owner_id: int) -> dict[int, str]:
+    with connect(path) as conn:
+        rows = conn.execute(
+            "SELECT folder_id, name FROM discogs_folders WHERE owner_id = ?", (owner_id,)
+        ).fetchall()
+    return {r["folder_id"]: r["name"] for r in rows}
+
+
+def used_folders(path: Path, owner_id: int) -> list[dict]:
+    """Folders that hold at least one of this owner's live albums, by name."""
+    with connect(path) as conn:
+        rows = conn.execute(
+            "SELECT f.folder_id AS id, f.name AS name FROM discogs_folders f"
+            " WHERE f.owner_id = ? AND EXISTS (SELECT 1 FROM albums a WHERE a.owner_id = ?"
+            " AND a.discogs_folder_id = f.folder_id AND a.deleted_at IS NULL)"
+            " ORDER BY f.name COLLATE NOCASE",
+            (owner_id, owner_id),
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def create_sync_run(path: Path, owner_id: int, condition: str) -> int:
+    with connect(path) as conn:
+        return conn.execute(
+            "INSERT INTO sync_runs (owner_id, condition) VALUES (?, ?)", (owner_id, condition)
+        ).lastrowid
+
+
+def get_sync_run(path: Path, run_id: int):
+    with connect(path) as conn:
+        return conn.execute("SELECT * FROM sync_runs WHERE id = ?", (run_id,)).fetchone()
+
+
+def latest_sync_run(path: Path, owner_id: int):
+    with connect(path) as conn:
+        return conn.execute(
+            "SELECT * FROM sync_runs WHERE owner_id = ? ORDER BY id DESC LIMIT 1", (owner_id,)
+        ).fetchone()
+
+
+def update_sync_run(path: Path, run_id: int, **values) -> None:
+    if not values or not set(values) <= SYNC_RUN_COLUMNS:
+        raise ValueError("unknown sync_runs column")
+    assignments = ", ".join(f"{column} = ?" for column in values)  # allowlisted names
+    finished = (
+        ", finished_at = CURRENT_TIMESTAMP" if values.get("state") in ("done", "error") else ""
+    )
+    with connect(path) as conn:
+        conn.execute(
+            f"UPDATE sync_runs SET {assignments}{finished} WHERE id = ?",  # noqa: S608
+            [*values.values(), run_id],
+        )
+
+
+def count_sync(path: Path, run_id: int, counter: str) -> None:
+    if counter not in SYNC_COUNTERS:
+        raise ValueError("unknown counter")
+    with connect(path) as conn:
+        conn.execute(
+            f"UPDATE sync_runs SET {counter} = {counter} + 1 WHERE id = ?",  # noqa: S608
+            (run_id,),
+        )
+
+
+def album_by_instance(path: Path, owner_id: int, instance_id: int):
+    """The album linked to this Discogs copy, including one in the trash."""
+    with connect(path) as conn:
+        return conn.execute(
+            "SELECT * FROM albums WHERE owner_id = ? AND discogs_instance_id = ?",
+            (owner_id, instance_id),
+        ).fetchone()
+
+
+def unlinked_album_for_release(path: Path, owner_id: int, release_id: int):
+    """A live album of this pressing not yet linked to a Discogs copy (oldest first)."""
+    with connect(path) as conn:
+        return conn.execute(
+            "SELECT * FROM albums WHERE owner_id = ? AND discogs_release_id = ?"
+            " AND discogs_instance_id IS NULL AND deleted_at IS NULL ORDER BY id LIMIT 1",
+            (owner_id, release_id),
+        ).fetchone()
+
+
+# Fields a sync may write to an album (fixed names; Discogs values are bound parameters).
+SYNC_FIELDS = {"condition", "sleeve_condition", "notes", "rating"}
+
+
+def link_album(
+    path: Path,
+    album_id: int,
+    *,
+    instance_id: int,
+    folder_id: int | None,
+    added_at: str | None,
+    run_id: int,
+    snapshot: dict,
+    changes: dict,
+) -> None:
+    """Record the Discogs copy, folder, and date for an album, plus any field changes."""
+    if not set(changes) <= SYNC_FIELDS:
+        raise ValueError("unknown album field")
+    sets = "".join(f", {column} = ?" for column in changes)  # allowlisted names
+    with connect(path) as conn:
+        conn.execute(
+            "UPDATE albums SET discogs_instance_id = ?, discogs_folder_id = ?,"  # noqa: S608
+            " discogs_added_at = ?, discogs_sync_run = ?, discogs_snapshot = ?"
+            f"{sets} WHERE id = ?",
+            [
+                instance_id,
+                folder_id,
+                added_at,
+                run_id,
+                json.dumps(snapshot, sort_keys=True),
+                *changes.values(),
+                album_id,
+            ],
+        )
+
+
+def mark_seen(path: Path, album_id: int, run_id: int) -> None:
+    with connect(path) as conn:
+        conn.execute("UPDATE albums SET discogs_sync_run = ? WHERE id = ?", (run_id, album_id))
+
+
+def set_album_field(path: Path, album_id: int, field: str, value) -> None:
+    if field not in SYNC_FIELDS:
+        raise ValueError("unknown album field")
+    with connect(path) as conn:
+        conn.execute(
+            f"UPDATE albums SET {field} = ? WHERE id = ?",  # noqa: S608 (allowlisted)
+            (value, album_id),
+        )
+
+
+def unlink_album(path: Path, album_id: int) -> None:
+    """Keep an album but forget its Discogs copy (it was removed on Discogs)."""
+    with connect(path) as conn:
+        conn.execute(
+            "UPDATE albums SET discogs_instance_id = NULL, discogs_folder_id = NULL,"
+            " discogs_added_at = NULL, discogs_sync_run = NULL, discogs_snapshot = NULL"
+            " WHERE id = ?",
+            (album_id,),
+        )
+
+
+def albums_missing_from_sync(path: Path, owner_id: int, run_id: int) -> list[int]:
+    """Live linked albums the finished sync didn't see on Discogs."""
+    with connect(path) as conn:
+        rows = conn.execute(
+            "SELECT id FROM albums WHERE owner_id = ? AND deleted_at IS NULL"
+            " AND discogs_instance_id IS NOT NULL"
+            " AND (discogs_sync_run IS NULL OR discogs_sync_run != ?)",
+            (owner_id, run_id),
+        ).fetchall()
+    return [r["id"] for r in rows]
+
+
+def add_sync_item(path: Path, owner_id: int, album_id: int, kind: str, field="", theirs=None):
+    """Add (or refresh) something for you to decide."""
+    with connect(path) as conn:
+        conn.execute(
+            "INSERT INTO sync_items (owner_id, album_id, kind, field, theirs)"
+            " VALUES (?, ?, ?, ?, ?) ON CONFLICT (album_id, kind, field)"
+            " DO UPDATE SET theirs = excluded.theirs, created_at = CURRENT_TIMESTAMP",
+            (owner_id, album_id, kind, field, json.dumps(theirs)),
+        )
+
+
+def clear_sync_items(path: Path, owner_id: int, kind: str) -> None:
+    with connect(path) as conn:
+        conn.execute("DELETE FROM sync_items WHERE owner_id = ? AND kind = ?", (owner_id, kind))
+
+
+def list_sync_items(path: Path, owner_id: int):
+    with connect(path) as conn:
+        return conn.execute(
+            "SELECT i.*, a.artist, a.title, a.condition, a.sleeve_condition, a.notes, a.rating,"
+            " a.discogs_folder_id FROM sync_items i JOIN albums a ON a.id = i.album_id"
+            " WHERE i.owner_id = ? AND a.deleted_at IS NULL"
+            " ORDER BY i.kind, a.artist COLLATE NOCASE, a.title COLLATE NOCASE, i.field",
+            (owner_id,),
+        ).fetchall()
+
+
+def get_sync_item(path: Path, owner_id: int, item_id: int):
+    with connect(path) as conn:
+        return conn.execute(
+            "SELECT * FROM sync_items WHERE id = ? AND owner_id = ?", (item_id, owner_id)
+        ).fetchone()
+
+
+def delete_sync_item(path: Path, item_id: int) -> None:
+    with connect(path) as conn:
+        conn.execute("DELETE FROM sync_items WHERE id = ?", (item_id,))
+
+
+def count_sync_items(path: Path, owner_id: int) -> int:
+    with connect(path) as conn:
+        return conn.execute(
+            "SELECT COUNT(*) FROM sync_items i JOIN albums a ON a.id = i.album_id"
+            " WHERE i.owner_id = ? AND a.deleted_at IS NULL",
+            (owner_id,),
+        ).fetchone()[0]
+
+
+def log_sync(path: Path, owner_id: int, run_id, album_id, action: str, detail: str = "") -> None:
+    with connect(path) as conn:
+        conn.execute(
+            "INSERT INTO sync_log (owner_id, run_id, album_id, action, detail)"
+            " VALUES (?, ?, ?, ?, ?)",
+            (owner_id, run_id, album_id, action, detail[:500]),
+        )
+
+
+def list_sync_log(path: Path, owner_id: int, limit: int = 50):
+    with connect(path) as conn:
+        return conn.execute(
+            "SELECT l.*, a.artist, a.title FROM sync_log l LEFT JOIN albums a ON a.id = l.album_id"
+            " WHERE l.owner_id = ? ORDER BY l.id DESC LIMIT ?",
+            (owner_id, int(limit)),
+        ).fetchall()

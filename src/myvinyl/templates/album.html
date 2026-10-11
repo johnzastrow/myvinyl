@@ -19,7 +19,10 @@
     <p class="chips">
       {% if album.year %}<span class="chip">{{ album.year }}</span>{% endif %}
       <span class="chip">{{ album.format }}</span>
-      <span class="chip chip-red">{{ album.condition }}</span>
+      <span class="chip chip-red" title="Record condition">{{ album.condition }}</span>
+      {% if album.sleeve_condition %}<span class="chip" title="Sleeve condition">sleeve {{ album.sleeve_condition }}</span>{% endif %}
+      {% if folder %}<span class="chip" title="Discogs folder">{{ folder }}</span>{% endif %}
+      {% if album.discogs_instance_id %}<span class="chip" title="Linked to a copy in your Discogs collection">in your Discogs collection</span>{% endif %}
       {% if album.label %}<span class="chip">{{ album.label }}</span>{% endif %}
       {% if album.pressing_locked %}<span class="chip">your pressing</span>{% endif %}
     </p>
@@ -40,6 +43,8 @@
 <p class="notice">No matching vinyl release found on Discogs. Check the artist and title spelling, then refresh.</p>
 {% elif album.discogs_status == "error" %}
 <p class="notice">The Discogs lookup did not finish (network error, rate limit, or restart). Try Refresh from Discogs.</p>
+{% elif album.discogs_full_pending %}
+<p class="hint">Quick lookup from your Discogs collection: price and details for your pressing. The range across other pressings fills in automatically within a few hours, or use Refresh from Discogs.</p>
 {% endif %}
 
 <section class="cards">
@@ -287,5 +292,5 @@
 </section>
 {% endif %}
 
-<p class="meta">Added {{ album.created_at | eastern }}{% if album.discogs_checked_at %} &middot; Discogs checked {{ album.discogs_checked_at | eastern }}{% endif %}</p>
+<p class="meta">Added {{ album.created_at | eastern }}{% if album.discogs_added_at %} &middot; added on Discogs {{ album.discogs_added_at | eastern }}{% endif %}{% if album.discogs_checked_at %} &middot; Discogs checked {{ album.discogs_checked_at | eastern }}{% endif %}</p>
 {% endblock %}

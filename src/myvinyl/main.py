@@ -4,6 +4,7 @@ import asyncio
 import csv
 import hmac
 import io
+import json
 import logging
 import secrets
 import sqlite3
@@ -23,7 +24,7 @@ from starlette.concurrency import run_in_threadpool
 from starlette.datastructures import UploadFile
 from starlette.middleware.sessions import SessionMiddleware
 
-from . import __version__, charts, db, discogs
+from . import __version__, charts, db, discogs, sync
 from .albums import (
     CONDITIONS,
     FORMATS,
@@ -32,6 +33,7 @@ from .albums import (
     MAX_TRACK_NOTE,
     RATINGS,
     ROLES,
+    SLEEVE_CONDITIONS,
     THEMES,
     album_to_values,
     check_new_password,
@@ -48,7 +50,7 @@ from .albums import (
 )
 from .auth import LoginLimiter, hash_password, hash_token, new_link_token, verify_password
 from .config import ConfigError, Settings
-from .lookups import JobQueue, PeriodicTask
+from .lookups import BULK, INTERACTIVE, JobQueue, PeriodicTask
 from .storage import COVER_EXTENSIONS, Storage
 from .tokens import TokenBox, hint, valid_token
 
@@ -152,6 +154,7 @@ def parse_filters(params) -> tuple[db.Filters, dict[str, str]]:
         min_rating=rating,
         min_value=low,
         max_value=high,
+        folder=int(raw["folder"]) if raw["folder"].isdigit() and len(raw["folder"]) < 10 else None,
     )
     clean = {k: v for k, v in raw.items() if v and getattr(f, k) not in ("", None)}
     return f, clean
@@ -284,6 +287,21 @@ def create_app(
         db.save_enrichment(path, album_id, result)
         save_cover(album_id)
 
+    def run_album_light(album_id: int) -> None:
+        """Price and details for a synced album whose pressing is known (2 API calls).
+        The hourly refresh does the full lookup with the price range later."""
+        album = db.get_album(path, album_id)
+        if album is None or not album["discogs_release_id"]:
+            return
+        try:
+            result = discogs_for(album["owner_id"]).enrich_pinned(album["discogs_release_id"])
+        except discogs.LOOKUP_ERRORS as exc:
+            log.warning("Discogs light lookup failed for album %s: %s", album_id, exc)
+            db.set_discogs_status(path, album_id, "error")
+            return
+        db.save_enrichment(path, album_id, result, full=False)
+        save_cover(album_id)
+
     def run_wish(wish_id: int) -> None:
         wish = db.get_wish(path, wish_id)
         if wish is None:
@@ -304,23 +322,33 @@ def create_app(
     def run_job(job) -> None:
         kind, item_id = job
         try:
-            {"album": run_album, "wish": run_wish, "cover": save_cover}[kind](item_id)
+            runners = {
+                "album": run_album,
+                "album_light": run_album_light,
+                "wish": run_wish,
+                "cover": save_cover,
+            }
+            runners[kind](item_id)
         except Exception:
             log.exception("job %r failed", job)
-            if kind == "album":
+            if kind in ("album", "album_light"):
                 db.set_discogs_status(path, item_id, "error")
             elif kind == "wish":
                 db.set_wish_status(path, item_id, "error")
 
     jobs = JobQueue(run_job, inline=inline_jobs)
 
-    def queue_album(album_id: int) -> None:
+    def queue_album(album_id: int, priority: int = INTERACTIVE) -> None:
         db.set_discogs_status(path, album_id, "pending")
-        jobs.submit(("album", album_id))
+        jobs.submit(("album", album_id), priority)
 
-    def queue_wish(wish_id: int) -> None:
+    def queue_light(album_id: int) -> None:
+        db.set_discogs_status(path, album_id, "pending")
+        jobs.submit(("album_light", album_id), BULK)
+
+    def queue_wish(wish_id: int, priority: int = INTERACTIVE) -> None:
         db.set_wish_status(path, wish_id, "pending")
-        jobs.submit(("wish", wish_id))
+        jobs.submit(("wish", wish_id), priority)
 
     def purge_album(album_id: int) -> None:
         cover = db.purge(path, album_id)
@@ -333,10 +361,10 @@ def create_app(
         if settings.refresh_days > 0:
             albums = db.due_for_refresh(path, settings.refresh_days, REFRESH_BATCH)
             for album_id in albums:
-                queue_album(album_id)
+                queue_album(album_id, BULK)
             wishes = db.wishes_due(path, settings.refresh_days, REFRESH_BATCH)
             for wish_id in wishes:
-                queue_wish(wish_id)
+                queue_wish(wish_id, BULK)
             if albums or wishes:
                 done.append(f"queued {len(albums)} albums and {len(wishes)} wishes for refresh")
         if settings.trash_days > 0:
@@ -385,7 +413,7 @@ def create_app(
                 album_id = db.create_album(
                     path, owner_id, data, release_id=item["release_id"], rating=item["rating"]
                 )
-                queue_album(album_id)
+                queue_album(album_id, BULK)
                 state["added"] += 1
             state["state"] = "done"
         except (*discogs.LOOKUP_ERRORS, ValueError) as exc:
@@ -409,7 +437,7 @@ def create_app(
                     {**item, "year": year, "target_cents": None},
                     release_id=item["release_id"],
                 )
-                queue_wish(wish_id)
+                queue_wish(wish_id, BULK)
                 state["added"] += 1
             state["state"] = "done"
         except (*discogs.LOOKUP_ERRORS, ValueError) as exc:
@@ -459,6 +487,7 @@ def create_app(
     templates.env.filters["eastern"] = eastern_time
     templates.env.filters["eastern_date"] = eastern_date
     templates.env.filters["stars"] = format_stars
+    templates.env.filters["fromjson"] = json.loads
     templates.env.globals["version"] = __version__
     limiter = LoginLimiter()
     # Wrong current passwords on Profile forms, per account. Five within 15 minutes
@@ -585,6 +614,7 @@ def create_app(
             errors=errors or {},
             formats=FORMATS,
             conditions=CONDITIONS,
+            sleeve_conditions=SLEEVE_CONDITIONS,
         )
 
     def release_tracks(album_id: int) -> list[dict]:
@@ -763,7 +793,7 @@ def create_app(
                 errors["discogs_key"] = "Discogs couldn't be reached to check the token. Try again."
         if errors:
             return account_page_response(request, 422, errors=errors)
-        db.set_discogs_token(path, user["id"], token_box.seal(user["id"], token))
+        db.set_discogs_token(path, user["id"], token_box.seal(user["id"], token), username)
         db.set_discogs_username_if_blank(path, user["id"], username)
         forget_service(user["id"])
         log.info("user %s saved a Discogs token", user["id"])
@@ -880,7 +910,10 @@ def create_app(
             request,
             "index.html",
             view=view,
-            queued=jobs.pending("album"),
+            queued=jobs.pending("album") + jobs.pending("album_light"),
+            review_count=0
+            if request.state.viewing
+            else db.count_sync_items(path, request.state.user["id"]),
             **collection_context(request),
         )
 
@@ -909,7 +942,16 @@ def create_app(
         filters, _ = parse_filters(request.query_params)
         buf = io.StringIO()
         writer = csv.writer(buf)
-        fields = ["artist", "title", "year", "label", "format", "condition", "notes"]
+        fields = [
+            "artist",
+            "title",
+            "year",
+            "label",
+            "format",
+            "condition",
+            "sleeve_condition",
+            "notes",
+        ]
         money = [
             "value_cents",
             "value_low_cents",
@@ -935,8 +977,11 @@ def create_app(
                 "styles",
                 "rating",
                 "review",
+                "discogs_folder",
+                "discogs_added",
             ]
         )
+        folders = db.folder_names(path, owner_id(request))
         for a in db.list_albums(path, owner_id(request), filters):
             amounts = ["" if a[m] is None else f"{a[m] / 100:.2f}" for m in money]
             row = [
@@ -952,6 +997,8 @@ def create_app(
                 a["styles"].replace("|", ", "),
                 a["rating"],
                 a["review"],
+                folders.get(a["discogs_folder_id"], ""),
+                a["discogs_added_at"] or "",
             ]
             writer.writerow([csv_safe(v) for v in row])
         return Response(
@@ -1074,6 +1121,7 @@ def create_app(
             tracks=tracks,
             pressings=pressings,
             chart=charts.value_history(db.get_history(path, album_id)),
+            folder=db.folder_names(path, album["owner_id"]).get(album["discogs_folder_id"]),
             notes=db.list_notes(path, album_id),
             ratings=RATINGS,
         )
@@ -1309,16 +1357,153 @@ def create_app(
 
     # --- Imports -----------------------------------------------------------------------
 
-    @router.get("/import")
-    async def import_page(request: Request):
+    def sync_context(request: Request) -> dict:
+        """Your Discogs link and latest collection sync, for the Import and review pages."""
+        user = request.state.user
+        linked = user["discogs_linked"] if user_token(user) else None
+        return {
+            "linked": linked,
+            "run": db.latest_sync_run(path, user["id"]),
+            "review_count": db.count_sync_items(path, user["id"]),
+        }
+
+    def import_page_response(request: Request, status_code: int = 200, **extra):
+        context = {
+            "status": import_status("collection", owner_id(request)),
+            "conditions": CONDITIONS,
+            "queued": jobs.pending("album") + jobs.pending("album_light"),
+            "errors": {},
+            **sync_context(request),
+            **extra,
+        }
+        return render(request, "import.html", status_code, **context)
+
+    def start_sync(request: Request, run_id: int) -> None:
+        """Run a collection sync for the signed-in user with their own token."""
+        user = request.state.user
+        svc = discogs_for(user["id"])
+        username = user["discogs_linked"]
+
+        def work() -> None:
+            try:
+                sync.run_collection_sync(
+                    path, svc, user["id"], username, run_id, queue_light, MAX_ALBUMS_PER_USER
+                )
+            except (*discogs.LOOKUP_ERRORS, ValueError) as exc:
+                log.warning("Discogs sync %s failed: %s", run_id, exc)
+                db.update_sync_run(path, run_id, state="error", message=import_error(exc))
+            except Exception:
+                log.exception("Discogs sync %s failed", run_id)
+                db.update_sync_run(
+                    path, run_id, state="error", message="The sync stopped unexpectedly."
+                )
+
+        if inline_jobs:
+            work()
+        else:
+            threading.Thread(target=work, name=f"discogs-sync-{run_id}", daemon=True).start()
+
+    def own_linked_account(request: Request) -> None:
+        """Private Discogs data is only read for your own linked account, never while an
+        admin is viewing someone else's collection."""
+        if request.state.viewing:
+            raise HTTPException(
+                status_code=400, detail="Switch back to your own collection to sync Discogs."
+            )
+        if not (request.state.user["discogs_linked"] and user_token(request.state.user)):
+            raise HTTPException(
+                status_code=400, detail="Add your Discogs token on your Profile page first."
+            )
+
+    @router.post("/discogs/sync")
+    async def sync_collection(request: Request):
+        form = await checked_form(request)
+        own_linked_account(request)
+        condition = form.get("condition")
+        if condition not in CONDITIONS:
+            return import_page_response(
+                request, 422, errors={"sync_condition": "Choose a condition."}
+            )
+        latest = db.latest_sync_run(path, request.state.user["id"])
+        if latest is None or latest["state"] != "running":
+            run_id = db.create_sync_run(path, request.state.user["id"], condition)
+            log.info("user %s started Discogs sync %s", request.state.user["id"], run_id)
+            start_sync(request, run_id)
+        return RedirectResponse("/import#discogs", status_code=303)
+
+    @router.post("/discogs/sync/{run_id}/resume")
+    async def resume_sync(request: Request, run_id: int):
+        await checked_form(request)
+        own_linked_account(request)
+        run = db.get_sync_run(path, run_id)
+        latest = db.latest_sync_run(path, request.state.user["id"])
+        if run is None or latest is None or run["id"] != latest["id"]:
+            raise HTTPException(status_code=404)
+        if run["state"] in ("interrupted", "error"):
+            db.update_sync_run(path, run_id, state="running", message="")
+            start_sync(request, run_id)
+        return RedirectResponse("/import#discogs", status_code=303)
+
+    @router.get("/discogs/review")
+    async def sync_review(request: Request):
+        user_id = request.state.user["id"]
         return render(
             request,
-            "import.html",
-            status=import_status("collection", owner_id(request)),
-            conditions=CONDITIONS,
-            queued=jobs.pending("album"),
-            errors={},
+            "sync_review.html",
+            items=db.list_sync_items(path, user_id),
+            log_rows=db.list_sync_log(path, user_id),
+            folders=db.folder_names(path, user_id),
+            labels=sync.LABELS,
+            **sync_context(request),
         )
+
+    def resolve(user_id: int, item, action: str) -> None:
+        if item["kind"] == "conflict" and action in ("mine", "theirs"):
+            if action == "theirs":
+                db.set_album_field(
+                    path, item["album_id"], item["field"], json.loads(item["theirs"])
+                )
+            db.log_sync(
+                path, user_id, None, item["album_id"], f"kept {action}", sync.LABELS[item["field"]]
+            )
+        elif item["kind"] == "removal" and action in ("trash", "keep"):
+            if action == "trash":
+                db.soft_delete(path, item["album_id"])
+            else:
+                db.unlink_album(path, item["album_id"])
+            db.log_sync(
+                path, user_id, None, item["album_id"], "trashed" if action == "trash" else "kept"
+            )
+        else:
+            raise HTTPException(status_code=400, detail="Unknown choice.")
+        db.delete_sync_item(path, item["id"])
+
+    @router.post("/discogs/review/{item_id}")
+    async def resolve_item(request: Request, item_id: int):
+        form = await checked_form(request)
+        user_id = request.state.user["id"]
+        item = db.get_sync_item(path, user_id, item_id)  # only your own items
+        if item is None:
+            raise HTTPException(status_code=404)
+        resolve(user_id, item, str(form.get("action", "")))
+        return RedirectResponse("/discogs/review", status_code=303)
+
+    @router.post("/discogs/review-all")
+    async def resolve_all(request: Request):
+        """Keep yours, or take Discogs', for every conflict at once."""
+        form = await checked_form(request)
+        action = form.get("action")
+        if action not in ("mine", "theirs"):
+            raise HTTPException(status_code=400, detail="Unknown choice.")
+        user_id = request.state.user["id"]
+        for item in db.list_sync_items(path, user_id):
+            if item["kind"] == "conflict":
+                resolve(user_id, item, action)
+        return RedirectResponse("/discogs/review", status_code=303)
+
+    @router.get("/import")
+    async def import_page(request: Request):
+        return import_page_response(request)
 
     @router.post("/import")
     async def start_collection_import(request: Request):
@@ -1331,15 +1516,7 @@ def create_app(
         if condition not in CONDITIONS:
             errors["condition"] = "Choose a condition."
         if errors:
-            return render(
-                request,
-                "import.html",
-                422,
-                errors=errors,
-                conditions=CONDITIONS,
-                status=import_status("collection", owner_id(request)),
-                queued=0,
-            )
+            return import_page_response(request, 422, errors=errors)
         start_import(
             "collection",
             owner_id(request),

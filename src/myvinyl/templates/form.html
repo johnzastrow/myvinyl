@@ -45,8 +45,16 @@
   {{ field("purchased_from", "Bought from", attrs='maxlength="200" placeholder="Shop, seller, or show"') }}
   <div class="row">
     <div>{{ choice("format", "Format", formats) }}</div>
-    <div>{{ choice("condition", "Condition", conditions) }}</div>
+    <div>{{ choice("condition", "Condition (record)", conditions) }}</div>
   </div>
+  <label for="sleeve_condition">Sleeve condition</label>
+  <select id="sleeve_condition" name="sleeve_condition">
+    <option value="">Not graded</option>
+    {% for opt in sleeve_conditions %}
+    <option value="{{ opt }}" {{ "selected" if values.get("sleeve_condition") == opt }}>{{ opt }}</option>
+    {% endfor %}
+  </select>
+  {% if errors.get("sleeve_condition") %}<p class="error">{{ errors["sleeve_condition"] }}</p>{% endif %}
   <label for="notes">Notes (always shown at the top of the album's notes)</label>
   <textarea id="notes" name="notes" rows="3" maxlength="2000">{{ values.get("notes", "") }}</textarea>
   {% if errors.get("notes") %}<p class="error">{{ errors["notes"] }}</p>{% endif %}

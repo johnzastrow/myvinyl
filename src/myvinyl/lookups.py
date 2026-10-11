@@ -5,6 +5,7 @@ API rate limit is shared fairly between new albums, refreshes, imports, wishlist
 checks, and cover downloads.
 """
 
+import itertools
 import logging
 import queue
 import threading
@@ -12,9 +13,14 @@ from collections.abc import Callable, Hashable
 
 log = logging.getLogger("myvinyl.lookups")
 
+# Job priorities: lower runs first. Something you just clicked beats a bulk import.
+INTERACTIVE = 0
+NORMAL = 1
+BULK = 2
+
 
 class JobQueue:
-    """Runs `process(job)` for each submitted job, one at a time, in order.
+    """Runs `process(job)` for each submitted job, one at a time: by priority, then in order.
 
     Jobs are hashable keys such as ("album", 5); a job already waiting is not queued twice.
     With inline=True (used by tests), work runs immediately in the caller's thread.
@@ -23,12 +29,13 @@ class JobQueue:
     def __init__(self, process: Callable[[Hashable], None], inline: bool = False) -> None:
         self._process = process
         self._inline = inline
-        self._queue: queue.Queue = queue.Queue()
+        self._queue: queue.PriorityQueue = queue.PriorityQueue()
+        self._order = itertools.count()  # keeps first-in, first-out within a priority
         self._queued: set = set()
         self._lock = threading.Lock()
         self._thread: threading.Thread | None = None
 
-    def submit(self, job: Hashable) -> bool:
+    def submit(self, job: Hashable, priority: int = NORMAL) -> bool:
         """Queue a job; returns False if it is already waiting."""
         if self._inline:
             self._run(job)
@@ -37,7 +44,7 @@ class JobQueue:
             if job in self._queued:
                 return False
             self._queued.add(job)
-        self._queue.put(job)
+        self._queue.put((priority, next(self._order), job))
         return True
 
     def pending(self, kind: str | None = None) -> int:
@@ -54,13 +61,13 @@ class JobQueue:
 
     def stop(self) -> None:
         if self._thread:
-            self._queue.put(None)
+            self._queue.put((BULK + 1, next(self._order), None))  # after queued work
             self._thread.join(timeout=5)
             self._thread = None
 
     def _loop(self) -> None:
         while True:
-            job = self._queue.get()
+            _, _, job = self._queue.get()
             if job is None:
                 return
             with self._lock:

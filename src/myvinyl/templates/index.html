@@ -25,6 +25,7 @@
 
 {% with action="/" %}{% include "_filters.html" %}{% endwith %}
 
+{% if review_count %}<p class="notice">Your last Discogs sync found {{ review_count }} thing{{ "" if review_count == 1 else "s" }} for you to decide. <a href="/discogs/review">Review</a></p>{% endif %}
 {% if queued %}<p class="hint">{{ queued }} album{{ "" if queued == 1 else "s" }} waiting for Discogs lookups.</p>{% endif %}
 
 {% if albums and view == "grid" %}

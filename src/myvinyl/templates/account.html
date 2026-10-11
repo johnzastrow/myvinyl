@@ -56,7 +56,7 @@
   {% if saved == "token" %}<p class="notice">Token saved. Your Discogs lookups, price checks, and imports now use it.</p>{% endif %}
   {% if saved == "token_removed" %}<p class="notice">Token removed. Discogs lookups for your collection now use anonymous access.</p>{% endif %}
   {% if token_hint %}
-  <p>Your token ending in <strong>&hellip;{{ token_hint }}</strong> is in use for your collection and wishlist.</p>
+  <p>Your token ending in <strong>&hellip;{{ token_hint }}</strong> is in use for your collection and wishlist{% if me.discogs_linked %}. It belongs to the Discogs account <strong>{{ me.discogs_linked }}</strong>; <a href="/import#discogs">sync that collection</a>{% endif %}.</p>
   {% else %}
   <p class="muted">No token yet. myvinyl still looks things up on Discogs without one, but slower (anonymous access is limited to 25 requests a minute for the whole site). A token raises that to 60.</p>
   {% endif %}

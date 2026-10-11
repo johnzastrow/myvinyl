@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block title %}Discogs sync - myvinyl{% endblock %}
+{% block content %}
+<h1>Discogs sync</h1>
+<p class="muted">Things your syncs found for you to decide, and what they did. Syncing only reads from Discogs; nothing here changes your Discogs account. <a href="/import#discogs">Sync again</a></p>
+
+{% set conflicts = items | selectattr("kind", "equalto", "conflict") | list %}
+{% set removals = items | selectattr("kind", "equalto", "removal") | list %}
+
+{% if conflicts %}
+<section class="panel">
+  <h2>Changed in both places ({{ conflicts | length }})</h2>
+  <p class="muted">You changed these here, and they were also changed on Discogs. Choose which to keep.</p>
+  <div class="actions">
+    <form method="post" action="/discogs/review-all"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="mine"><button class="button-outline" type="submit">Keep mine for all</button></form>
+    <form method="post" action="/discogs/review-all"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="theirs"><button class="button-outline" type="submit">Use Discogs for all</button></form>
+  </div>
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>Album</th><th>Field</th><th>Here</th><th>On Discogs</th><th></th></tr></thead>
+    <tbody>
+      {% for i in conflicts %}
+      {% set theirs = i.theirs | fromjson %}
+      <tr>
+        <td class="wrap"><a href="/albums/{{ i.album_id }}">{{ i.artist }} &ndash; {{ i.title }}</a></td>
+        <td>{{ labels[i.field] }}</td>
+        <td class="wrap">{% if i.field == "rating" %}{{ i.rating | stars or "none" }}{% else %}{{ i[i.field] or "none" }}{% endif %}</td>
+        <td class="wrap">{% if i.field == "rating" %}{{ theirs | stars or "none" }}{% else %}{{ theirs or "none" }}{% endif %}</td>
+        <td class="row-actions">
+          <form method="post" action="/discogs/review/{{ i.id }}"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="mine"><button class="link" type="submit">Keep mine</button></form>
+          <form method="post" action="/discogs/review/{{ i.id }}"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="theirs"><button class="link" type="submit">Use Discogs</button></form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</section>
+{% endif %}
+
+{% if removals %}
+<section class="panel">
+  <h2>No longer on Discogs ({{ removals | length }})</h2>
+  <p class="muted">These were in your Discogs collection at an earlier sync but aren't now. Nothing is removed until you choose.</p>
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>Album</th><th>Folder</th><th></th></tr></thead>
+    <tbody>
+      {% for i in removals %}
+      <tr>
+        <td class="wrap"><a href="/albums/{{ i.album_id }}">{{ i.artist }} &ndash; {{ i.title }}</a></td>
+        <td>{{ folders.get(i.discogs_folder_id, "") }}</td>
+        <td class="row-actions">
+          <form method="post" action="/discogs/review/{{ i.id }}"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="trash"><button class="link danger-link" type="submit">Move to trash</button></form>
+          <form method="post" action="/discogs/review/{{ i.id }}"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="keep"><button class="link" type="submit">Keep it here</button></form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</section>
+{% endif %}
+
+{% if not items %}<p class="notice">Nothing to decide.</p>{% endif %}
+
+<section class="panel">
+  <h2>Recent activity</h2>
+  {% if log_rows %}
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>When</th><th>What</th><th>Album</th><th>Details</th></tr></thead>
+    <tbody>
+      {% for l in log_rows %}
+      <tr>
+        <td>{{ l.created_at | eastern }}</td>
+        <td>{{ l.action }}</td>
+        <td class="wrap">{% if l.album_id %}<a href="/albums/{{ l.album_id }}">{{ l.artist }} &ndash; {{ l.title }}</a>{% endif %}</td>
+        <td class="wrap">{{ l.detail }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% else %}<p class="muted">No syncs yet.</p>{% endif %}
+</section>
+{% endblock %}

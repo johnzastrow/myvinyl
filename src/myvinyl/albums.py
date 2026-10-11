@@ -11,6 +11,9 @@ from decimal import Decimal, InvalidOperation
 FORMATS = ["LP", "2xLP", "EP", '7"', '10"', '12" single', "Box set"]
 # Goldmine grading scale, best to worst.
 CONDITIONS = ["M", "NM", "VG+", "VG", "G+", "G", "F", "P"]
+# Sleeves are graded separately (Goldmine, and Discogs' Sleeve Condition field); a sleeve
+# can also be generic or missing. Blank means not graded.
+SLEEVE_CONDITIONS = [*CONDITIONS, "Generic", "No cover"]
 FIELDS = [
     "artist",
     "title",
@@ -18,6 +21,7 @@ FIELDS = [
     "label",
     "format",
     "condition",
+    "sleeve_condition",
     "notes",
     "value",
     "purchase_price",
@@ -115,6 +119,8 @@ def parse_album(form: Mapping) -> tuple[dict, dict[str, str], dict[str, str]]:
         errors["format"] = "Choose a format."
     if values["condition"] not in CONDITIONS:
         errors["condition"] = "Choose a condition."
+    if values["sleeve_condition"] and values["sleeve_condition"] not in SLEEVE_CONDITIONS:
+        errors["sleeve_condition"] = "Choose a sleeve condition."
     value_cents, error = parse_money(values["value"])
     if error:
         errors["value"] = error

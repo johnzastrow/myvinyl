@@ -19,6 +19,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass, field, replace
+from datetime import UTC, datetime
 from decimal import Decimal
 
 from . import __version__
@@ -52,11 +53,18 @@ class Pacer:
         if wait > 0:
             time.sleep(wait)
 
+    def hold(self, seconds: float) -> None:
+        """Make the next request wait at least `seconds` (Discogs says we're nearly out)."""
+        with self._lock:
+            self._next_at = max(self._next_at, time.monotonic() + seconds)
+
 
 # Discogs limits requests per source IP (60/min with a token, 25 without), so every
 # client in this process shares one pacer per kind, staying just under each limit.
 TOKEN_PACER = Pacer(55)
 ANONYMOUS_PACER = Pacer(23)
+LOW_REMAINING = 2  # requests left in Discogs' window before we pause
+LOW_REMAINING_PAUSE = 15  # seconds
 
 
 class DiscogsClient:
@@ -72,6 +80,13 @@ class DiscogsClient:
     def _wait_turn(self) -> None:
         self._pacer.wait_turn()
 
+    def _note_remaining(self, headers) -> None:
+        """Slow down before Discogs' moving one-minute window runs out."""
+        remaining = headers.get("X-Discogs-Ratelimit-Remaining") if headers else None
+        if isinstance(remaining, str) and remaining.isdigit() and int(remaining) <= LOW_REMAINING:
+            log.info("Discogs rate limit nearly used up (%s left); pausing", remaining)
+            self._pacer.hold(LOW_REMAINING_PAUSE)
+
     def get(self, path: str, params: dict[str, str] | None = None) -> dict:
         url = API + path
         if params:
@@ -85,6 +100,7 @@ class DiscogsClient:
             try:
                 with urllib.request.urlopen(req, timeout=TIMEOUT_SECONDS) as resp:  # noqa: S310
                     body = resp.read(MAX_RESPONSE_BYTES + 1)
+                    self._note_remaining(getattr(resp, "headers", None))
                 break
             except urllib.error.HTTPError as exc:
                 if exc.code == 429 and attempt == 0:
@@ -329,6 +345,26 @@ def enrich(
     )
 
 
+def enrich_pinned(client: DiscogsClient, release_id: int) -> Enrichment:
+    """Light lookup for a known pressing: its price and release record (2 API calls).
+
+    The value range across other pressings is left to a later full lookup.
+    """
+    priced = price_pressing(client, Pressing(int(release_id), "", None, "", "", "", ""))
+    release = client.get(f"/releases/{int(release_id)}")
+    chosen = _pressing_from_release(release, priced)
+    price = chosen.price_cents
+    return Enrichment(
+        release_id=chosen.release_id,
+        value_cents=price,
+        low_cents=price,
+        high_cents=price,
+        median_cents=price,
+        pressings=[chosen],
+        release=release,
+    )
+
+
 # --- Discogs collection import -------------------------------------------------------------
 
 
@@ -400,6 +436,99 @@ def collection(client: DiscogsClient, username: str, max_pages: int = 50):
             rating = _int_or_none(item.get("rating"))
             fields["rating"] = float(rating) if rating and 1 <= rating <= 5 else None
             yield fields
+
+
+# Discogs' default collection fields, by name, mapped onto myvinyl fields.
+MEDIA_FIELD = "Media Condition"
+SLEEVE_FIELD = "Sleeve Condition"
+NOTES_FIELD = "Notes"
+GRADES = {  # Discogs grade text -> myvinyl grade
+    "Mint (M)": "M",
+    "Near Mint (NM or M-)": "NM",
+    "Very Good Plus (VG+)": "VG+",
+    "Very Good (VG)": "VG",
+    "Good Plus (G+)": "G+",
+    "Good (G)": "G",
+    "Fair (F)": "F",
+    "Poor (P)": "P",
+}
+SLEEVE_GRADES = {**GRADES, "Generic": "Generic", "No Cover": "No cover"}
+
+
+def _user_path(username: str) -> str:
+    if not valid_username(username):
+        raise ValueError("Invalid Discogs username")
+    return "/users/" + urllib.parse.quote(username, safe="")
+
+
+def collection_folders(client: DiscogsClient, username: str) -> list[dict]:
+    """Folders of a collection: [{id, name}], private ones included for the owner."""
+    data = client.get(_user_path(username) + "/collection/folders")
+    folders = data.get("folders") if isinstance(data.get("folders"), list) else []
+    return [
+        {"id": f["id"], "name": _text(f.get("name"), 100) or f"Folder {f['id']}"}
+        for f in folders
+        if isinstance(f, dict) and _int_or_none(f.get("id")) is not None and f["id"] >= 0
+    ]
+
+
+def collection_fields(client: DiscogsClient, username: str) -> dict[int, str]:
+    """Custom collection fields: {field id: name} (Media Condition, Sleeve Condition, ...)."""
+    data = client.get(_user_path(username) + "/collection/fields")
+    fields = data.get("fields") if isinstance(data.get("fields"), list) else []
+    return {
+        f["id"]: _text(f.get("name"), 100)
+        for f in fields
+        if isinstance(f, dict) and _int_or_none(f.get("id")) is not None
+    }
+
+
+def collection_page(client: DiscogsClient, username: str, page: int) -> tuple[int, list[dict]]:
+    """One page (100 items) of the whole collection (folder 0): (page count, raw items)."""
+    data = client.get(
+        _user_path(username) + "/collection/folders/0/releases",
+        {"per_page": "100", "page": str(int(page)), "sort": "added", "sort_order": "asc"},
+    )
+    pagination = data.get("pagination") if isinstance(data.get("pagination"), dict) else {}
+    pages = _int_or_none(pagination.get("pages")) or 1
+    items = data.get("releases") if isinstance(data.get("releases"), list) else []
+    return pages, [i for i in items if isinstance(i, dict)]
+
+
+def parse_instance(item: dict, fields: dict[int, str]) -> dict | None:
+    """One copy in a Discogs collection, as myvinyl fields; None unless it is vinyl."""
+    info = item.get("basic_information")
+    if not isinstance(info, dict) or _int_or_none(info.get("id")) is None or info["id"] <= 0:
+        return None
+    instance_id = _int_or_none(item.get("instance_id"))
+    if instance_id is None or instance_id <= 0:
+        return None
+    base = _release_fields(info)
+    if base is None:
+        return None
+    values = {}
+    for note in item.get("notes") or []:
+        if isinstance(note, dict) and _int_or_none(note.get("field_id")) in fields:
+            values[fields[note["field_id"]]] = _text(note.get("value"), 2000)
+    rating = _int_or_none(item.get("rating"))
+    added = _text(item.get("date_added"), 40)
+    match = re.fullmatch(r"(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2}:\d{2})([-+]\d{2}:\d{2})?", added)
+    if match:
+        offset = match.group(3) or "+00:00"
+        stamp = datetime.fromisoformat(f"{match.group(1)}T{match.group(2)}{offset}")
+        added = stamp.astimezone(UTC).strftime("%Y-%m-%d %H:%M:%S")
+    else:
+        added = None
+    return {
+        **base,
+        "instance_id": instance_id,
+        "folder_id": _int_or_none(item.get("folder_id")),
+        "added_at": added,
+        "condition": GRADES.get(values.get(MEDIA_FIELD, ""), ""),
+        "sleeve_condition": SLEEVE_GRADES.get(values.get(SLEEVE_FIELD, ""), ""),
+        "notes": values.get(NOTES_FIELD, "").strip(),
+        "rating": float(rating) if rating and 1 <= rating <= 5 else None,
+    }
 
 
 def wantlist(client: DiscogsClient, username: str, max_pages: int = 20):
@@ -614,6 +743,18 @@ class DiscogsService:
     def identity(self) -> str:
         """Username of the token's owner; checks that a token works."""
         return identity(self.client)
+
+    def enrich_pinned(self, release_id: int) -> Enrichment:
+        return enrich_pinned(self.client, release_id)
+
+    def collection_folders(self, username: str) -> list[dict]:
+        return collection_folders(self.client, username)
+
+    def collection_fields(self, username: str) -> dict[int, str]:
+        return collection_fields(self.client, username)
+
+    def collection_page(self, username: str, page: int) -> tuple[int, list[dict]]:
+        return collection_page(self.client, username, page)
 
     def enrich(self, artist, title, year, release_id=None) -> Enrichment | None:
         return enrich(self.client, artist, title, year, release_id)

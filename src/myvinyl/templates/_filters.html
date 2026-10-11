@@ -24,6 +24,12 @@
     <option value="">Any rating</option>
     {% for r in ratings | reverse %}{% if r == r | int %}<option value="{{ r }}" {{ "selected" if f.min_rating and f.min_rating | float == r }}>{{ r | int }}+ stars</option>{% endif %}{% endfor %}
   </select>
+  {% if options.folders %}
+  <select name="folder" aria-label="Discogs folder">
+    <option value="">Any folder</option>
+    {% for fo in options.folders %}<option value="{{ fo.id }}" {{ "selected" if f.folder == fo.id | string }}>{{ fo.name }}</option>{% endfor %}
+  </select>
+  {% endif %}
   <input name="min_value" value="{{ f.min_value or '' }}" placeholder="Min $" inputmode="decimal" maxlength="12" aria-label="Minimum value" class="filter-money">
   <input name="max_value" value="{{ f.max_value or '' }}" placeholder="Max $" inputmode="decimal" maxlength="12" aria-label="Maximum value" class="filter-money">
   <button class="button-small" type="submit">Filter</button>
