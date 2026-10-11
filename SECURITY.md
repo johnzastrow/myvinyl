@@ -5,6 +5,44 @@
 Please report suspected vulnerabilities privately through GitHub's
 **Security → Report a vulnerability** on this repository rather than in a public issue.
 
+## Security review (2026-10-11, version 0.8.0)
+
+A follow-up review of everything since 0.6.0: cover uploads and barcode edits (0.7.0), the
+per-user encrypted Discogs tokens (0.8.0), the deployment files, and the security
+requirements for planned work (second factor, email, off-server backups, sharing links,
+two-way Discogs sync; recorded on those GitHub issues). The 0.6.0 controls below were
+re-checked and still hold. No Critical or High findings.
+
+| ID | Finding | Severity | Status |
+|---|---|---|---|
+| VULN-008 | Current-password checks on Profile forms had no rate limit: a stolen session could guess the password, and any member could tie up the Argon2 slots logins use | Medium | Fixed |
+| VULN-009 | An admin viewing another collection ran imports and barcode searches with that user's Discogs token (could import their private Discogs collection) | Low | Fixed |
+| VULN-010 | A disabled account's Discogs token kept being used by scheduled refreshes | Low | Fixed |
+| C-1 | Discogs API terms may limit how long marketplace prices are shown (prices refresh weekly) | Compliance | Open, [#18](https://github.com/johnzastrow/myvinyl/issues/18) |
+| C-2 | The app lacks the "not affiliated with Discogs" notice the API terms ask for | Compliance | Open, [#18](https://github.com/johnzastrow/myvinyl/issues/18) |
+
+#### VULN-008: Unthrottled password re-checks (Medium, fixed)
+- **Fix:** Every current-password check (Discogs token, username/email, password change)
+  goes through a per-account limiter: 5 wrong passwords in 15 minutes locks those forms
+  (HTTP 429) and signs the account out everywhere, ending any stolen session. Failures
+  are logged with the user id.
+
+#### VULN-009: Admin view used the viewed user's token (Low, fixed)
+- **Fix:** Discogs work started by a request (imports, barcode searches) always uses the
+  signed-in user's own token. Background lookups of a collection's albums still use the
+  owner's token.
+
+#### VULN-010: Disabled accounts' tokens stayed in use (Low, fixed)
+- **Fix:** Tokens of disabled accounts are never used, the cached client is dropped on
+  disable, and scheduled refreshes skip disabled owners' albums and wishes.
+
+### Notes
+- Decrypted tokens are cached in process memory while in use (one process). Losing or
+  changing `MYVINYL_TOKEN_KEY` makes stored tokens unreadable; users fall back to
+  anonymous access and re-enter them. Key rotation is not built yet
+  ([#17](https://github.com/johnzastrow/myvinyl/issues/17)).
+- Login rate limits apply per IP and per username; Profile re-checks per account.
+
 ## Security review (2026-10-09, version 0.6.0)
 
 A full review of the stack before the first internet deployment. It covered the FastAPI
@@ -65,7 +103,7 @@ misconfiguration, error handling, logging, supply chain), plus a dependency audi
 #### VULN-006: Shared Discogs quota (Low, fixed)
 - **Fix:** Each account is limited to 20,000 albums, for both manual adds and imports.
   All Discogs calls go through one throttled worker, so heavy use slows lookups for
-  everyone but can't get the server's token rate-limited or banned.
+  everyone but can't get the server rate-limited or banned by Discogs.
 
 #### VULN-007: Server banner (Low, fixed)
 - **Fix:** uvicorn runs with `server_header=False`; Caddy also strips `Server`.

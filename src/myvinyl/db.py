@@ -915,6 +915,7 @@ def due_for_refresh(path: Path, days: int, limit: int) -> list[int]:
             "SELECT id FROM albums WHERE deleted_at IS NULL"
             " AND COALESCE(discogs_status, '') != 'pending'"
             " AND (discogs_checked_at IS NULL OR discogs_checked_at < datetime('now', ?))"
+            " AND owner_id NOT IN (SELECT id FROM users WHERE disabled = 1)"
             " ORDER BY discogs_checked_at IS NOT NULL, discogs_checked_at LIMIT ?",
             (f"-{int(days)} days", int(limit)),
         ).fetchall()
@@ -994,6 +995,7 @@ def wishes_due(path: Path, days: int, limit: int) -> list[int]:
         rows = conn.execute(
             "SELECT id FROM wishlist WHERE COALESCE(discogs_status, '') != 'pending'"
             " AND (checked_at IS NULL OR checked_at < datetime('now', ?))"
+            " AND owner_id NOT IN (SELECT id FROM users WHERE disabled = 1)"
             " ORDER BY checked_at IS NOT NULL, checked_at LIMIT ?",
             (f"-{int(days)} days", int(limit)),
         ).fetchall()

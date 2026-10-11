@@ -245,3 +245,64 @@ def test_token_never_logged(authed, lookup, caplog):
         lookup.identity_error = urllib.error.HTTPError("u", 401, "Unauthorized", {}, None)
         save_token(authed, token=OTHER)
     assert TOKEN not in caplog.text and OTHER not in caplog.text
+
+
+# --- Security review follow-ups -------------------------------------------------------------
+
+
+def test_wrong_current_passwords_are_rate_limited(authed, tmp_path):
+    for _ in range(5):
+        assert save_token(authed, password="not my password").status_code == 422
+    # Locked: further attempts are refused without checking, and the account was signed
+    # out everywhere, so a stolen session can't keep guessing.
+    assert authed.get("/", follow_redirects=False).status_code == 303
+    login_again = csrf_from(authed, "/login")
+    authed.post("/login", data={"csrf": login_again, "username": "admin", "password": PASSWORD})
+    assert save_token(authed).status_code == 429
+    assert stored(tmp_path) is None
+
+
+def bob_saves_token(second):
+    csrf = csrf_from(second, "/account")
+    r = second.post(
+        "/account/discogs-token", data={"csrf": csrf, "token": OTHER, "current": NEW_PASSWORD}
+    )
+    assert r.status_code == 200
+
+
+def test_admin_viewing_a_collection_never_uses_that_users_token(authed, second, lookup, tmp_path):
+    bob_saves_token(second)
+    save_token(authed)
+    bob = db.get_user_by_name(tmp_path / "test.db", "bob")
+    authed.post(f"/admin/view/{bob['id']}", data={"csrf": csrf_from(authed, "/admin")})
+
+    # An import started while viewing bob runs with the admin's own token.
+    lookup.used_tokens.clear()
+    csrf = csrf_from(authed, "/import")
+    authed.post("/import", data={"csrf": csrf, "username": "bobsdiscogs", "condition": "VG+"})
+    assert lookup.used_tokens == [TOKEN]
+
+    # So does a barcode search.
+    lookup.used_tokens.clear()
+    lookup.identifier_matches = []
+    add(authed, identifier="12345")
+    assert lookup.used_tokens == [TOKEN]
+
+
+def test_disabled_users_token_is_not_used(authed, second, lookup, tmp_path):
+    bob_saves_token(second)
+    bob = db.get_user_by_name(tmp_path / "test.db", "bob")
+    csrf = csrf_from(authed, "/admin")
+    authed.post(f"/admin/users/{bob['id']}/disable", data={"csrf": csrf})
+    authed.post(f"/admin/view/{bob['id']}", data={"csrf": csrf})
+    lookup.used_tokens.clear()
+    add(authed, artist="New Order", title="Substance")  # bob's album, looked up in a job
+    assert OTHER not in lookup.used_tokens
+    # Disabled owners' albums and wishes are left out of the scheduled refresh.
+    authed.post("/admin/view-mine", data={"csrf": csrf_from(authed, "/")})
+    add(authed, artist="Admin", title="Mine")
+    path = tmp_path / "test.db"
+    with db.connect(path) as conn:
+        conn.execute("UPDATE albums SET discogs_checked_at = '2000-01-01 00:00:00'")
+        mine = conn.execute("SELECT id FROM albums WHERE title = 'Mine'").fetchone()["id"]
+    assert db.due_for_refresh(path, 7, 50) == [mine]

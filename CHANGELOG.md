@@ -16,6 +16,13 @@ All notable changes to myvinyl. Versions follow [semantic versioning](https://se
 - Discogs requests share one pace per kind (token / anonymous), because Discogs counts its
   limits per server, not per token.
 
+### Security
+- Security review of 0.7.0 and 0.8.0 (SECURITY.md). Fixed: wrong current passwords on
+  Profile forms are now rate-limited per account (5 in 15 minutes locks the forms and
+  signs the account out everywhere); Discogs work an admin starts while viewing another
+  collection uses the admin's own token; disabled accounts' tokens are never used and
+  their albums skip scheduled refreshes.
+
 ### Removed
 - `MYVINYL_DISCOGS_TOKEN` (the shared server token). If still set, it is ignored with a
   warning.

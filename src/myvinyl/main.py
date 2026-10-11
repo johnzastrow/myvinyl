@@ -194,8 +194,13 @@ def create_app(
         return token_box.open(user["id"], user["discogs_token"]) if user else ""
 
     def discogs_for(owner: int | None):
-        """Discogs access for work on this user's collection: their token, else anonymous."""
-        token = user_token(db.get_user(path, owner)) if owner else ""
+        """Discogs access for work on this user's collection: their token, else anonymous.
+
+        Disabled accounts' tokens are never used. Work an admin starts while viewing
+        someone else's collection runs as the admin (see `acting_discogs`).
+        """
+        user = db.get_user(path, owner) if owner else None
+        token = user_token(user) if user and not user["disabled"] else ""
         if not token:
             return anonymous
         with services_lock:
@@ -208,6 +213,11 @@ def create_app(
     def forget_service(user_id: int) -> None:
         with services_lock:
             services.pop(user_id, None)
+
+    def acting_discogs(request: Request):
+        """Discogs access for work started by a request: always the signed-in user's own
+        token, so an admin viewing another collection never acts with that user's token."""
+        return discogs_for(request.state.user["id"])
 
     # First run: create the admin account from MYVINYL_PASSWORD_HASH.
     if db.count_users(path) == 0:
@@ -351,10 +361,10 @@ def create_app(
     def import_status(kind: str, owner_id: int) -> dict:
         return imports.get((kind, owner_id), {"state": "idle", "added": 0, "skipped": 0})
 
-    def run_collection_import(owner_id: int, username: str, condition: str) -> None:
+    def run_collection_import(owner_id: int, svc, username: str, condition: str) -> None:
         state = imports[("collection", owner_id)]
         try:
-            for item in discogs_for(owner_id).collection(username):
+            for item in svc.collection(username):
                 if db.count_albums(path, owner_id) >= MAX_ALBUMS_PER_USER:
                     state.update(state="error", message="The collection is at its size limit.")
                     return
@@ -385,10 +395,10 @@ def create_app(
             log.exception("Discogs collection import failed")
             state.update(state="error", message="The import stopped unexpectedly.")
 
-    def run_wantlist_import(owner_id: int, username: str) -> None:
+    def run_wantlist_import(owner_id: int, svc, username: str) -> None:
         state = imports[("wantlist", owner_id)]
         try:
-            for item in discogs_for(owner_id).wantlist(username):
+            for item in svc.wantlist(username):
                 if db.wish_for_release(path, owner_id, item["release_id"]):
                     state["skipped"] += 1
                     continue
@@ -451,6 +461,10 @@ def create_app(
     templates.env.filters["stars"] = format_stars
     templates.env.globals["version"] = __version__
     limiter = LoginLimiter()
+    # Wrong current passwords on Profile forms, per account. Five within 15 minutes
+    # locks those forms and signs the account out everywhere (a stolen session can't
+    # keep guessing the password, or tie up the Argon2 slots that logins need).
+    reauth_limiter = LoginLimiter()
     hash_slots = asyncio.Semaphore(HASH_SLOTS)
 
     async def check_password(password_hash: str | None, password: str) -> bool:
@@ -458,6 +472,22 @@ def create_app(
         # every other request, and cap concurrency so a login flood can't exhaust memory.
         async with hash_slots:
             return await run_in_threadpool(verify_password, password_hash, password)
+
+    async def recheck_password(request: Request, password) -> bool:
+        """Check the signed-in user's current password before a sensitive change."""
+        user = request.state.user
+        key = f"user:{user['id']}"
+        if reauth_limiter.blocked(key):
+            raise HTTPException(status_code=429, detail="Too many wrong passwords. Try later.")
+        if isinstance(password, str) and await check_password(user["password_hash"], password):
+            reauth_limiter.reset(key)
+            return True
+        reauth_limiter.record_failure(key)
+        log.warning("wrong current password on a profile form for user %s", user["id"])
+        if reauth_limiter.blocked(key):
+            log.warning("user %s signed out everywhere after repeated wrong passwords", user["id"])
+            db.bump_session_version(path, user["id"])
+        return False
 
     async def make_hash(password: str) -> str:
         async with hash_slots:
@@ -717,7 +747,7 @@ def create_app(
             errors["discogs_key"] = (
                 "That doesn't look like a Discogs token (20 to 100 letters and digits)."
             )
-        if not isinstance(current, str) or not await check_password(user["password_hash"], current):
+        if not await recheck_password(request, current):
             errors["key_current"] = "That isn't your current password."
         if not errors:
             try:
@@ -745,7 +775,7 @@ def create_app(
         form = await checked_form(request)
         user = request.state.user
         current = form.get("current")
-        if not isinstance(current, str) or not await check_password(user["password_hash"], current):
+        if not await recheck_password(request, current):
             errors = {"key_remove_current": "That isn't your current password."}
             return account_page_response(request, 422, errors=errors)
         db.set_discogs_token(path, user["id"], None)
@@ -772,7 +802,7 @@ def create_app(
             errors["username"] = username_error
         if email_error:
             errors["email"] = email_error
-        if not isinstance(current, str) or not await check_password(user["password_hash"], current):
+        if not await recheck_password(request, current):
             errors["identity_current"] = "That isn't your current password."
         if not errors:
             clash = db.set_identity(path, user["id"], username, email)
@@ -808,7 +838,7 @@ def create_app(
         user = request.state.user
         errors = {}
         current = form.get("current")
-        if not isinstance(current, str) or not await check_password(user["password_hash"], current):
+        if not await recheck_password(request, current):
             errors["current"] = "That isn't your current password."
         error = check_new_password(form.get("password"), form.get("confirm"))
         if error:
@@ -939,9 +969,10 @@ def create_app(
         response to send instead: the form with an error, or the page for choosing among
         several pressings. `album` is set when editing an existing album.
         """
-        owner = album["owner_id"] if album else owner_id(request)
         try:
-            matches = await run_in_threadpool(discogs_for(owner).find_by_identifier, identifier)
+            matches = await run_in_threadpool(
+                acting_discogs(request).find_by_identifier, identifier
+            )
         except discogs.LOOKUP_ERRORS as exc:
             log.warning("Discogs identifier search failed: %s", exc)
             matches = None
@@ -1309,7 +1340,14 @@ def create_app(
                 status=import_status("collection", owner_id(request)),
                 queued=0,
             )
-        start_import("collection", owner_id(request), run_collection_import, username, condition)
+        start_import(
+            "collection",
+            owner_id(request),
+            run_collection_import,
+            acting_discogs(request),
+            username,
+            condition,
+        )
         return RedirectResponse("/import", status_code=303)
 
     # --- Wishlist ----------------------------------------------------------------------
@@ -1352,7 +1390,9 @@ def create_app(
         username = str(form.get("username", "")).strip()
         if not discogs.valid_username(username):
             raise HTTPException(status_code=400, detail="Enter your Discogs username.")
-        start_import("wantlist", owner_id(request), run_wantlist_import, username)
+        start_import(
+            "wantlist", owner_id(request), run_wantlist_import, acting_discogs(request), username
+        )
         return RedirectResponse("/wishlist", status_code=303)
 
     @router.post("/wishlist/{wish_id}/refresh")
@@ -1469,6 +1509,7 @@ def create_app(
             raise HTTPException(status_code=400, detail="You can't disable your own account.")
         guard_last_admin(user, becoming_inactive=True)
         db.set_user_disabled(path, user_id, True)
+        forget_service(user_id)  # their token is no longer used
         return RedirectResponse("/admin", status_code=303)
 
     @admin.post("/users/{user_id}/enable")
