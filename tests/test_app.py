@@ -462,6 +462,83 @@ def test_cover_must_be_one_of_the_release_images(authed):
     )
 
 
+JPEG = b"\xff\xd8\xff\xe0" + b"1" * 64
+
+
+def upload(client, link, data, name="mine.jpg", **extra):
+    token = extra.pop("csrf", None) or csrf_from(client, link)
+    return client.post(
+        link + "/cover/upload",
+        data={"csrf": token},
+        files={"image": (name, data, "image/jpeg")},
+        follow_redirects=False,
+    )
+
+
+def test_upload_own_cover(authed, lookup, tmp_path):
+    add(authed, artist="New Order", title="Substance")
+    link = first_album_link(authed)
+    album_id = album_id_of(link)
+    assert "Use your own image" in authed.get(link).text
+
+    r = upload(authed, link, JPEG)
+    assert r.status_code == 303 and r.headers["location"] == f"{link}#art"
+    album = db.get_album(tmp_path / "test.db", album_id)
+    assert album["cover_custom"] == 1 and album["cover_file"] == f"{album_id}.jpg"
+    r = authed.get(f"/covers/{album_id}")
+    assert r.content == JPEG and r.headers["content-type"] == "image/jpeg"
+    page = authed.get(link).text
+    assert "Showing the cover you uploaded" in page and 'aria-pressed="true"' not in page
+    assert not list((tmp_path / "covers").glob(f"{album_id}.png"))  # Discogs copy replaced
+
+    # A Discogs refresh leaves your cover alone.
+    lookup.image_urls.clear()
+    token = csrf_from(authed, link)
+    authed.post(link + "/lookup", data={"csrf": token})
+    assert lookup.image_urls == []
+    assert db.get_album(tmp_path / "test.db", album_id)["cover_file"] == f"{album_id}.jpg"
+
+    # Removing it goes back to the Discogs cover.
+    token = csrf_from(authed, link)
+    authed.post(link + "/cover/reset", data={"csrf": token})
+    album = db.get_album(tmp_path / "test.db", album_id)
+    assert album["cover_custom"] == 0 and album["cover_file"] == f"{album_id}.png"
+    assert not (tmp_path / "covers" / f"{album_id}.jpg").exists()
+
+
+def test_choosing_discogs_image_replaces_upload(authed, tmp_path):
+    add(authed, artist="New Order", title="Substance")
+    link = first_album_link(authed)
+    upload(authed, link, JPEG)
+    token = csrf_from(authed, link)
+    authed.post(link + "/cover", data={"csrf": token, "uri": "https://i.discogs.com/back.jpg"})
+    album = db.get_album(tmp_path / "test.db", album_id_of(link))
+    assert album["cover_custom"] == 0 and album["cover_file"].endswith(".png")
+
+
+def test_upload_cover_without_discogs_match(authed, lookup, tmp_path):
+    lookup.result = None
+    add(authed, artist="Unknown", title="Demo")
+    link = first_album_link(authed)
+    assert upload(authed, link, JPEG).status_code == 303
+    assert 'class="cover" src="/covers/' in authed.get(link).text
+
+
+def test_upload_cover_rejects_bad_files(authed, tmp_path):
+    add(authed, artist="New Order", title="Substance")
+    link = first_album_link(authed)
+    before = db.get_album(tmp_path / "test.db", album_id_of(link))["cover_file"]
+    # Content decides, not the name or the declared type.
+    assert upload(authed, link, b"<svg onload=alert(1)>", name="x.jpg").status_code == 400
+    assert upload(authed, link, b"<html>", name="x.png").status_code == 400
+    assert upload(authed, link, b"").status_code == 400
+    big = b"\xff\xd8\xff" + b"0" * 5_000_000
+    assert upload(authed, link, big).status_code == 413
+    assert upload(authed, link, JPEG, csrf="wrong").status_code == 403
+    after = db.get_album(tmp_path / "test.db", album_id_of(link))
+    assert after["cover_file"] == before and after["cover_custom"] == 0
+
+
 def test_times_shown_in_eastern(authed):
     from myvinyl.main import eastern_time
 

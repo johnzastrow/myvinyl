@@ -19,6 +19,7 @@ from fastapi.responses import FileResponse, PlainTextResponse, RedirectResponse,
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.concurrency import run_in_threadpool
+from starlette.datastructures import UploadFile
 from starlette.middleware.sessions import SessionMiddleware
 
 from . import __version__, charts, db, discogs
@@ -53,6 +54,8 @@ PKG_DIR = Path(__file__).parent
 SESSION_MAX_AGE = 12 * 60 * 60  # 12 hours
 MAX_QUERY_LEN = 200
 MAX_ALBUMS_PER_USER = 20_000  # caps Discogs work any one account can cause
+# Cover uploads: the image cap plus room for the multipart envelope and CSRF field.
+MAX_UPLOAD_BYTES = discogs.MAX_IMAGE_BYTES + 64_000
 HASH_SLOTS = 2  # concurrent Argon2 operations (each uses ~64 MB and ~150 ms of CPU)
 REFRESH_BATCH = 20  # albums (and wishes) re-queued per hourly run
 LINK_DAYS = 7  # invite and reset links expire after a week
@@ -88,9 +91,12 @@ def csrf_token(request: Request) -> str:
     return token
 
 
-async def checked_form(request: Request):
-    """Read a POSTed form, rejecting it unless the CSRF token matches the session."""
-    form = await request.form()
+async def checked_form(request: Request, **limits):
+    """Read a POSTed form, rejecting it unless the CSRF token matches the session.
+
+    `limits` are passed to Starlette's parser (max_files, max_fields, max_part_size).
+    """
+    form = await request.form(**limits)
     sent = form.get("csrf")
     expected = request.session.get("csrf")
     if not expected or not isinstance(sent, str) or not hmac.compare_digest(sent, expected):
@@ -175,11 +181,15 @@ def create_app(
 
     # --- Background jobs -----------------------------------------------------------
 
+    # Serializes cover writes so a background Discogs download can't overwrite a cover
+    # you uploaded while it was in flight.
+    cover_lock = threading.Lock()
+
     def save_cover(album_id: int) -> None:
         """Download the displayed cover and keep a local copy."""
         album = db.get_album(path, album_id, include_deleted=True)
         release, _ = db.get_discogs(path, album_id)
-        if album is None or not release:
+        if album is None or not release or album["cover_custom"]:
             return
         summary = discogs.release_summary(release)
         uris = {i["uri"] for i in summary["images"]}
@@ -191,7 +201,22 @@ def create_app(
         except (*discogs.LOOKUP_ERRORS, ValueError) as exc:
             log.warning("cover download failed for album %s: %s", album_id, exc)
             return
-        db.set_cover_file(path, album_id, storage.save_cover(album_id, data, ext))
+        with cover_lock:
+            album = db.get_album(path, album_id, include_deleted=True)
+            if album is None or album["cover_custom"]:
+                return  # you uploaded your own cover meanwhile
+            db.set_cover_file(path, album_id, storage.save_cover(album_id, data, ext))
+
+    def store_custom_cover(album_id: int, data: bytes, ext: str) -> None:
+        with cover_lock:
+            db.set_cover_file(path, album_id, storage.save_cover(album_id, data, ext), True)
+
+    def drop_custom_cover(album_id: int) -> None:
+        with cover_lock:
+            album = db.get_album(path, album_id)
+            if album and album["cover_custom"]:
+                storage.delete_cover(album["cover_file"])
+                db.set_cover_file(path, album_id, None)
 
     def run_album(album_id: int) -> None:
         album = db.get_album(path, album_id)
@@ -1019,6 +1044,38 @@ def create_app(
         if not isinstance(uri, str) or uri not in allowed:
             raise HTTPException(status_code=400, detail="Unknown image.")
         db.set_cover(path, album_id, uri)
+        jobs.submit(("cover", album_id))
+        return RedirectResponse(f"/albums/{album_id}#art", status_code=303)
+
+    @router.post("/albums/{album_id}/cover/upload")
+    async def upload_cover(request: Request, album_id: int):
+        """Use your own image as the cover until you pick a Discogs image again."""
+        # Refuse oversized bodies before parsing; Starlette spools file parts to disk
+        # without a size cap of its own. Browsers always send Content-Length for forms.
+        length = positive_int(request.headers.get("content-length"))
+        if length is None or length > MAX_UPLOAD_BYTES:
+            raise HTTPException(status_code=413, detail="Images can be up to 5 MB.")
+        form = await checked_form(request, max_files=1, max_fields=5)
+        album_access(request, album_id)
+        upload = form.get("image")
+        if not isinstance(upload, UploadFile):
+            raise HTTPException(status_code=400, detail="Choose an image file.")
+        data = await upload.read(discogs.MAX_IMAGE_BYTES + 1)
+        if len(data) > discogs.MAX_IMAGE_BYTES:
+            raise HTTPException(status_code=413, detail="Images can be up to 5 MB.")
+        # Judged by content, never by the file name or the browser's content type.
+        ext = discogs.image_extension(data)
+        if ext is None:
+            raise HTTPException(status_code=400, detail="Use a JPEG, PNG, WebP, or GIF image.")
+        await run_in_threadpool(store_custom_cover, album_id, data, ext)
+        return RedirectResponse(f"/albums/{album_id}#art", status_code=303)
+
+    @router.post("/albums/{album_id}/cover/reset")
+    async def reset_cover(request: Request, album_id: int):
+        """Remove your uploaded cover and go back to the Discogs one."""
+        await checked_form(request)
+        album_access(request, album_id)
+        await run_in_threadpool(drop_custom_cover, album_id)
         jobs.submit(("cover", album_id))
         return RedirectResponse(f"/albums/{album_id}#art", status_code=303)
 

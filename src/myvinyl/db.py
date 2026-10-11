@@ -73,6 +73,7 @@ CREATE TABLE IF NOT EXISTS albums (
     genres TEXT NOT NULL DEFAULT '',   -- '|'-separated, from Discogs
     styles TEXT NOT NULL DEFAULT '',
     cover_file TEXT,            -- locally saved copy of the displayed cover
+    cover_custom INTEGER NOT NULL DEFAULT 0,  -- 1 = you uploaded the cover
     created_at  TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at  TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
@@ -175,6 +176,7 @@ MIGRATIONS = {
     "genres": "TEXT NOT NULL DEFAULT ''",
     "styles": "TEXT NOT NULL DEFAULT ''",
     "cover_file": "TEXT",
+    "cover_custom": "INTEGER NOT NULL DEFAULT 0",
 }
 
 # Columns added to `users` after it was introduced.
@@ -685,13 +687,20 @@ def trash_due(path: Path, days: int) -> list[int]:
 
 
 def set_cover(path: Path, album_id: int, uri: str) -> None:
+    """Display one of the Discogs images; this replaces a cover you uploaded."""
     with connect(path) as conn:
-        conn.execute("UPDATE albums SET cover_uri = ? WHERE id = ?", (uri, album_id))
+        conn.execute(
+            "UPDATE albums SET cover_uri = ?, cover_custom = 0 WHERE id = ?", (uri, album_id)
+        )
 
 
-def set_cover_file(path: Path, album_id: int, filename: str | None) -> None:
+def set_cover_file(path: Path, album_id: int, filename: str | None, custom=False) -> None:
+    """Record the locally saved cover; `custom` marks one you uploaded yourself."""
     with connect(path) as conn:
-        conn.execute("UPDATE albums SET cover_file = ? WHERE id = ?", (filename, album_id))
+        conn.execute(
+            "UPDATE albums SET cover_file = ?, cover_custom = ? WHERE id = ?",
+            (filename, 1 if custom else 0, album_id),
+        )
 
 
 def set_pressing(path: Path, album_id: int, release_id: int | None) -> None:

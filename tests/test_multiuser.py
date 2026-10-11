@@ -62,6 +62,10 @@ def test_invite_creates_member_with_private_collection(authed, second, tmp_path)
     assert second.get(admin_album + "/edit").status_code == 404
     assert second.post(admin_album + "/delete", data={"csrf": token}).status_code == 404
     assert second.post(admin_album + "/notes", data={"csrf": token, "body": "x"}).status_code == 404
+    image = {"image": ("x.png", b"\x89PNG\r\n\x1a\n" + b"0" * 32, "image/png")}
+    r = second.post(admin_album + "/cover/upload", data={"csrf": token}, files=image)
+    assert r.status_code == 404
+    assert second.post(admin_album + "/cover/reset", data={"csrf": token}).status_code == 404
     assert second.get("/admin").status_code == 404
 
 

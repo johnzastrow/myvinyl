@@ -414,6 +414,9 @@ tr.chosen, tr.deal { background: var(--chosen) !important; }
 
 .art-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 12px; }
 .art-grid form { margin: 0; }
+.cover-upload { margin-top: 16px; }
+.cover-upload .actions { margin-top: 6px; }
+.cover-upload input[type="file"] { flex: 1 1 220px; min-width: 0; width: auto; }
 button.art {
   position: relative;
   display: block;

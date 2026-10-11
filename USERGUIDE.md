@@ -26,6 +26,8 @@ Site: **https://myvinyl.fluidgrid.site**
 - Leave **Street value** blank and myvinyl looks it up on Discogs. A lookup takes about
   12 to 30 seconds, and the album page refreshes itself until it's done.
 - Fields you fill in are never overwritten. Blank label and year are filled from Discogs.
+- Wrong barcode, or added without one? **Edit** → change **Barcode or catalog number**
+  → **Save**. The pressing is looked up again, just as on Add.
 
 ### The album page
 | Section | What you can do |
@@ -36,7 +38,7 @@ Site: **https://myvinyl.fluidgrid.site**
 | Value history | A chart of value and range over time; it appears after two lookups. |
 | Your rating and review | Half a star to 5 stars, plus a written review. |
 | Rate tracks | Link above the tracklist: a rating and short note per track. |
-| Album art | Click an image to make it the displayed cover. |
+| Album art | Click an image to make it the displayed cover, or **Use your own image** to upload one (JPEG, PNG, WebP, or GIF, up to 5 MB). Your upload stays until you remove it or click a Discogs image. |
 | Notes | Add dated notes: cleanings, plays, where you found it. |
 | Purchase | **Edit** → price paid, date, where bought. Gain or loss is calculated for you. |
 

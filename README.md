@@ -62,8 +62,9 @@ For day-to-day instructions, see the **[User Guide](USERGUIDE.md)**.
 - **Release details:** release date, country, label and catalog number, format details,
   genres, styles, barcodes, matrix/runout identifiers, tracklist, credits, community
   have/want counts and rating, and release notes.
-- **Album art:** every image on the release is kept; choose the one to display. The chosen
-  cover is saved locally so it keeps working even if Discogs changes its links.
+- **Album art:** every image on the release is kept; choose the one to display, or upload
+  your own. The cover is saved locally so it keeps working even if Discogs changes its
+  links.
 - **Fills in what you left blank:** an empty label or year comes from Discogs; anything
   you typed is never overwritten.
 
@@ -273,7 +274,8 @@ sale price or an appraisal.
 | Record what you paid | **Edit** → price paid, date bought, bought from. |
 | Add a dated note | Album page → **Notes** → **Add note**. |
 | Rate and review | Album page → **Your rating and review**; **Rate tracks** above the tracklist. |
-| Change the cover | Album page → click an image under **Album art**. |
+| Change the cover | Album page → click an image under **Album art**, or **Use your own image** to upload one (JPEG, PNG, WebP, GIF; 5 MB). |
+| Fix the barcode | **Edit** → change **Barcode or catalog number** → **Save**. The pressing is looked up again. |
 | Filter | Use the filter bar on the collection or stats page; **Clear** resets it. |
 | Print a report | **Print report** (follows the current filters) → your browser's Print (Ctrl+P). |
 | Wishlist | **Wishlist** → add records or import your Discogs wantlist → **Got it** when you buy one. |
@@ -369,6 +371,11 @@ myvinyl/
 ## Changelog
 
 The full history is in [CHANGELOG.md](CHANGELOG.md).
+
+### 0.7.0 - 2026-10-11
+- **Added:** upload your own cover image (#1); edit an album's barcode or catalog number,
+  which re-matches the pressing on Discogs (#2). The Caddy block allows 6 MB bodies on the
+  upload path only.
 
 ### 0.6.1 - 2026-10-09
 - **Added:** change usernames (users on their Profile with their password; admins for

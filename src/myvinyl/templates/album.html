@@ -119,25 +119,44 @@
   </form>
 </section>
 
-{% if release and release.images | length > 1 %}
 <section class="panel" id="art">
-  <h2>Album art <span class="small">{{ release.images | length }} images from Discogs &middot; choose the one to display</span></h2>
+  {% set several = release and release.images | length > 1 %}
+  {# A cover you uploaded is displayed instead of any Discogs image. #}
+  {% set shown = "" if album.cover_custom else cover %}
+  <h2>Album art{% if several %} <span class="small">{{ release.images | length }} images from Discogs &middot; choose the one to display</span>{% endif %}</h2>
+  {% if several %}
   <div class="art-grid">
     {% for img in release.images %}
     <form method="post" action="/albums/{{ album.id }}/cover">
       <input type="hidden" name="csrf" value="{{ csrf }}">
       <input type="hidden" name="uri" value="{{ img.uri }}">
-      <button class="art{{ ' art-selected' if img.uri == cover }}" type="submit" aria-pressed="{{ 'true' if img.uri == cover else 'false' }}" title="Use this image{{ ' (' ~ img.type ~ ')' if img.type }}">
+      <button class="art{{ ' art-selected' if img.uri == shown }}" type="submit" aria-pressed="{{ 'true' if img.uri == shown else 'false' }}" title="Use this image{{ ' (' ~ img.type ~ ')' if img.type }}">
         <img src="{{ img.thumb }}" alt="Image {{ loop.index }}{{ ' (' ~ img.type ~ ')' if img.type }}" referrerpolicy="no-referrer">
-        {% if img.uri == cover %}<span class="art-tag">Displayed</span>{% endif %}
+        {% if img.uri == shown %}<span class="art-tag">Displayed</span>{% endif %}
       </button>
     </form>
     {% endfor %}
   </div>
+  {% elif release and not release.images %}
+  <p class="hint">This Discogs release has no album art.</p>
+  {% endif %}
+  {% if album.cover_custom %}
+  <form class="actions" method="post" action="/albums/{{ album.id }}/cover/reset">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <span class="muted">Showing the cover you uploaded.</span>
+    <button class="link" type="submit">Remove it and use the Discogs cover</button>
+  </form>
+  {% endif %}
+  <form class="cover-upload" method="post" action="/albums/{{ album.id }}/cover/upload" enctype="multipart/form-data">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <label for="cover-image">{{ "Replace with another image" if album.cover_custom else "Use your own image" }}</label>
+    <div class="actions">
+      <input id="cover-image" name="image" type="file" accept="image/jpeg,image/png,image/webp,image/gif" required>
+      <button type="submit">Upload</button>
+    </div>
+    <p class="hint">JPEG, PNG, WebP, or GIF up to 5 MB. It stays until you remove it or choose a Discogs image.</p>
+  </form>
 </section>
-{% elif release and not release.images %}
-<p class="hint">This Discogs release has no album art.</p>
-{% endif %}
 
 <section class="panel" id="journal">
   <h2>Notes</h2>

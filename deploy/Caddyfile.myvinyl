@@ -5,8 +5,14 @@
 myvinyl.fluidgrid.site {
 	encode zstd gzip
 
-	# Forms are small; nothing in myvinyl uploads files.
-	request_body {
+	# Forms are small; only cover uploads (images up to 5 MB) need more. The two
+	# matchers don't overlap, so exactly one limit applies to each request.
+	@cover_upload path /albums/*/cover/upload
+	@not_upload not path /albums/*/cover/upload
+	request_body @cover_upload {
+		max_size 6MB
+	}
+	request_body @not_upload {
 		max_size 1MB
 	}
 

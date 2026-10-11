@@ -81,6 +81,7 @@ misconfiguration, error handling, logging, supply chain), plus a dependency audi
 | Authorization / IDOR | Every album, cover, note, track, trash, and wishlist route loads the record and checks owner-or-admin, returning 404 (not 403) so ids can't be probed. Admin routes require the admin role, read from the database on each request. The last active admin can't be disabled or demoted. |
 | SSRF | The Discogs API host is fixed; paths are built only from integers or a regex-validated, URL-quoted username. Image URLs are allowlisted to `i.discogs.com` and must be among the release's own images. |
 | Path traversal | Cover files are named `<integer>.<ext>`; reads validate that pattern before touching disk. Backup paths are fixed. |
+| File upload (0.7.0) | Cover uploads are owner-or-admin and CSRF-checked. The type comes from the file's magic bytes (JPEG, PNG, WebP, GIF only; no SVG), never from its name or declared type. The size is capped at 5 MB in the app (Content-Length checked before parsing, then the bytes read) and 6 MB in Caddy on that one path. Files are stored as `<album id>.<ext>`, served with a fixed image content type, `nosniff`, and the CSP. Image metadata such as EXIF location is kept as uploaded. |
 | Deserialization | Only `json.loads` on Discogs responses (size-capped, every field type-checked). No pickle/YAML/eval. |
 | Open redirect | All redirects are to fixed internal paths with integer ids. |
 | CSV injection | Exported cells starting with `= + - @ \t \r` are prefixed with `'`. |

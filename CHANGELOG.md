@@ -2,6 +2,31 @@
 
 All notable changes to myvinyl. Versions follow [semantic versioning](https://semver.org/).
 
+## 0.7.0 - 2026-10-11
+
+### Added
+- **Upload your own cover** ([#1](https://github.com/johnzastrow/myvinyl/issues/1)).
+  Album page → **Album art** → **Use your own image**: JPEG, PNG, WebP, or GIF up to 5 MB,
+  checked by its content rather than its name. It replaces the displayed cover everywhere
+  (album page, cover grid, reports) and is never replaced by the weekly Discogs refresh.
+  **Remove it** goes back to the Discogs cover; choosing a Discogs image also replaces it.
+  Works for albums with no Discogs match too.
+- **Edit the barcode or catalog number** ([#2](https://github.com/johnzastrow/myvinyl/issues/2)).
+  The Edit page now shows the field. Changing it looks up the pressing on Discogs again,
+  as on Add: one match pins it and refreshes value, details, and cover; several matches
+  let you choose; no match shows an error and saves nothing. Fields you filled in and your
+  format are kept. Clearing it keeps the current pressing.
+
+### Changed
+- `deploy/Caddyfile.myvinyl` allows request bodies up to 6 MB on the cover-upload path
+  only; every other path keeps the 1 MB limit.
+
+### Upgrade notes
+- An `albums.cover_custom` column is added automatically on startup.
+- Update the myvinyl block in the server's `/etc/caddy/Caddyfile` from
+  `deploy/Caddyfile.myvinyl`, then `sudo caddy validate` and reload. Without it, Caddy
+  refuses cover uploads larger than 1 MB.
+
 ## 0.6.1 - 2026-10-09
 
 ### Added
