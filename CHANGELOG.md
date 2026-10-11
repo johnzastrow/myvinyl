@@ -2,6 +2,17 @@
 
 All notable changes to myvinyl. Versions follow [semantic versioning](https://semver.org/).
 
+## 0.10.1 - 2026-10-11
+
+### Changed
+- **User guide gaps filled** ([#28](https://github.com/johnzastrow/myvinyl/issues/28)). New
+  section **How myvinyl uses Discogs**: what a lookup saves, when lookups run, what works
+  without a token and the shared request limit, and what each kind of Discogs import
+  brings in and skips. Also documented: the Community card, Discogs details, median and
+  for-sale counts, picking a pressing, Let myvinyl pick automatically, Most valuable,
+  wishlist Check price and Remove, deleting notes, Empty trash, the trash period,
+  password lockouts, and the admin Server panel.
+
 ## 0.10.0 - 2026-10-11
 
 ### Added

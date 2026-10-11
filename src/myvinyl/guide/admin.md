@@ -28,6 +28,15 @@ Notes:
 - myvinyl backs up the database every 24 hours and keeps the last 14.
 - **Admin** → **Back up now** makes one immediately; the list shows the latest files.
 
+### Server panel
+The **Server** panel on the Admin page shows how Discogs access is shared (each user's own
+token, 60 requests a minute; otherwise anonymous, 25 a minute; both counted for the whole
+server) and how many lookups are waiting. A long queue after a big import or sync is
+normal and clears by itself.
+
+Server settings such as the price-refresh interval and how long the trash keeps albums
+are set by whoever runs the server, not on this page.
+
 ### Users' Discogs tokens
 Each user adds their own token on their Profile page. The **Users** table shows
 **set** or **none** per user; **Clear** removes a user's token (for example if it leaked).

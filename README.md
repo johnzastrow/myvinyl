@@ -391,6 +391,9 @@ myvinyl/
 
 The full history is in [CHANGELOG.md](CHANGELOG.md).
 
+### 0.10.1 - 2026-10-11
+- **Docs:** user guide covers every feature, with a new How myvinyl uses Discogs section (#28).
+
 ### 0.10.0 - 2026-10-11
 - **Added:** in-app user guide with screenshots (**Help** in the menu, plus a link on each
   page) (#21).

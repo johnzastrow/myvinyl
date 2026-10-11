@@ -22,11 +22,48 @@ the pages bring you to the matching section.
 - Leave **Street value** blank and myvinyl looks it up on Discogs. A lookup takes about
   12 to 30 seconds, and the album page refreshes itself until it's done.
 - Fields you fill in are never overwritten. Blank label and year are filled from Discogs.
+- **Which pressing is yours?** When a barcode or catalog number matches several vinyl
+  releases, myvinyl lists them with year, country, label, catalog number, and format
+  (**details** opens each on Discogs). Click **This one** on yours, or **Start over**.
 - Wrong barcode, or added without one? **Edit** → change **Barcode or catalog number**
   → **Save**. The pressing is looked up again, just as on Add.
 
 ![The Add album form: a barcode or catalog number box at the top, then artist, title, format, record and sleeve condition, value, label, and purchase fields](../static/guide/add.png)
 *Add album. A barcode or catalog number gives the most exact match.*
+
+## How myvinyl uses Discogs
+myvinyl gets prices, details, and art from [Discogs](https://www.discogs.com). It only
+reads from Discogs; nothing you do here changes anything there.
+
+**What a lookup does.** For each album, myvinyl finds the pressing that best matches
+(or the one you picked), then checks up to 10 pressings of the same album. It saves:
+- **Prices:** the lowest current asking price for your pressing (the street value), the
+  low-high range and median across the checked pressings, and how many are for sale.
+  Prices are in US dollars and are asking prices, not appraisals or sale prices.
+- **Release details:** label, year, genres and styles, barcode and other identifiers,
+  tracklist, credits, release notes, and community counts.
+- **Album art:** the release's images, to choose your cover from.
+
+**When it happens.**
+- When you add an album (about 12 to 30 seconds), or click **Refresh from Discogs**.
+- Automatically about once a week for every album and wishlist record. The admin sets
+  how often.
+- Albums from a Discogs sync get a quick price for your exact pressing first; the full
+  range fills in over the next few hours.
+
+**With or without a Discogs token.** Everything works without a token except syncing
+your own collection; lookups are just slower. Discogs allows 60 requests a minute with a
+token and 25 without, counted for the whole server, so everyone on this site shares
+them. A full lookup takes about 12 requests. When Discogs is busy, lookups wait their
+turn: what you click goes first, and bulk imports and automatic refreshes go last.
+
+**Other ways in from Discogs:**
+
+| Source | What comes across | What's skipped |
+|---|---|---|
+| Your own collection (sync, needs your token) | Every vinyl copy in every folder, including private ones, with folder, grades, notes, rating, and date added | Non-vinyl, and albums you've put in the trash here |
+| Someone's public collection (**Import**) | Each vinyl release with artist, title, year, label, format, and rating; every album gets the condition you choose | Releases already in your collection (same pressing). No grades, folders, or notes. |
+| Your public wantlist (**Wishlist** → **Import wantlist**) | Each wanted release, with its price checked | Records already on your wishlist |
 
 ## Your Discogs collection
 With your own Discogs token, myvinyl reads your Discogs collection, including private
@@ -68,14 +105,18 @@ collection by **Discogs folder** with the folder menu in the filter bar.
 ## The album page
 | Section | What you can do |
 |---|---|
-| Street value / Range | The lowest Discogs asking price for your pressing, plus the low-high range across up to 10 pressings. Not an appraisal. |
-| Pressings checked | If the matched pressing isn't yours, click **Mine** on the right row. Value, details, and art switch to it. |
+| Street value | The lowest Discogs asking price for your pressing. **release** links to it on Discogs. Not an appraisal. |
+| Range across pressings | The low-high range of the lowest asking prices across up to 10 pressings, with the median and how many are for sale. |
+| Community | How many Discogs members have and want this release, and its average rating there. |
+| Pressings checked | Each pressing checked, with its price; the year links to Discogs. If the matched pressing isn't yours, click **Mine** on the right row: value, details, and art switch to it. **Let myvinyl pick automatically** undoes your choice. |
 | Refresh from Discogs | Re-check prices now. Prices also refresh automatically about once a week. |
 | Value history | A chart of value and range over time; it appears after two lookups. |
 | Your rating and review | Half a star to 5 stars, plus a written review. |
 | Rate tracks | Link above the tracklist: a rating and short note per track. |
 | Album art | Click an image to make it the displayed cover, or **Use your own image** to upload one (JPEG, PNG, WebP, or GIF, up to 5 MB). Your upload stays until you remove it or click a Discogs image. |
-| Notes | Add dated notes: cleanings, plays, where you found it. |
+| Notes | Add dated notes: cleanings, plays, where you found it. **Delete** removes one. |
+| Discogs details | Release date, country, label and catalog number, format, genres and styles, barcode, and (expand it) matrix, runout, and other identifiers. **View on Discogs** opens the release. |
+| Tracklist, credits, release notes | From the release on Discogs. |
 | Purchase | **Edit** → price paid, date, where bought. Gain or loss is calculated for you. |
 | Record and sleeve grades | **Edit** → **Condition (record)** and **Sleeve condition** (Goldmine grades; a sleeve can also be Generic or No cover, or left Not graded). |
 | Discogs chips | Folder name and "in your Discogs collection" show for albums linked to your Discogs collection. |
@@ -87,7 +128,8 @@ collection by **Discogs folder** with the folder menu in the filter bar.
 - **Filter bar** (collection and Stats pages): search text, genre, decade, format,
   condition, minimum rating, Discogs folder (after a sync), value range. **Clear** resets it.
 - **List / Covers** switches between the table and a cover grid. Click a column header to sort.
-- **Stats:** breakdowns by genre, decade, format, condition, label, and rating.
+- **Stats:** breakdowns by genre, decade, format, condition, label, and rating, plus your
+  10 most valuable albums.
 - **Print report:** a printable list of the current (filtered) view. Use your browser's
   Print (Ctrl+P or Cmd+P); choose "Save as PDF" for a file.
 - **Export CSV:** a spreadsheet of the current view.
@@ -104,7 +146,9 @@ collection by **Discogs folder** with the folder menu in the filter bar.
 ## Wishlist
 - **Wishlist** → add artist, title, and an optional target price. myvinyl checks the
   lowest Discogs price weekly and highlights records at or below your target.
-- **Import wantlist** pulls in your public Discogs wantlist.
+- **Check price** looks a record up again now; **Remove** takes it off the list.
+- **Import wantlist** pulls in your public Discogs wantlist. Records already on your
+  wishlist are skipped.
 - **Got it:** choose the condition, enter what you paid, and the record moves to your collection.
 
 ![The Wishlist page: wanted records with target prices and current lowest prices, and forms to add a record or import a wantlist](../static/guide/wishlist.png)
@@ -112,8 +156,10 @@ collection by **Discogs folder** with the folder menu in the filter bar.
 
 ## Deleting and restoring
 - **Edit** → **Move this album to the trash**.
-- **Trash** → **Restore** puts it back; **Delete forever** removes it. Albums left in the
-  trash are deleted automatically after 30 days.
+- **Trash** → **Restore** puts it back; **Delete forever** removes it; **Empty trash**
+  removes everything there.
+- Albums left in the trash are deleted automatically after a set time (30 days unless
+  the admin changed it). The Trash page shows the current period.
 
 ![The Trash page listing a deleted album with Restore and Delete forever buttons](../static/guide/trash.png)
 *Trash.*
@@ -132,6 +178,10 @@ Click your name (top right):
 - **Sign out everywhere**, if you used a shared or lost device.
 
 Forgot your password? Ask an admin for a reset link.
+
+**Wrong passwords.** After 5 failed sign-ins within 15 minutes, signing in is paused for
+a while; wait and try again. On the Profile page, 5 wrong current passwords within 15
+minutes also sign you out everywhere, in case someone else is using your session.
 
 ![The Profile page: display name, about, Discogs username, theme, change password, Discogs token with the linked account, and username and email](../static/guide/profile.png)
 *Profile, including your Discogs token.*

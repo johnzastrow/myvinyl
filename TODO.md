@@ -34,6 +34,7 @@ Legend: **(decision)** needs an answer before work starts.
 - [ ] Collection-wide value history chart ([#16](https://github.com/johnzastrow/myvinyl/issues/16))
 
 ## Done
+- [x] 0.10.1: user guide gaps filled, including Discogs features ([#28](https://github.com/johnzastrow/myvinyl/issues/28))
 - [x] 0.10.0: in-app user guide, linked from every page ([#21](https://github.com/johnzastrow/myvinyl/issues/21))
 - [x] 0.9.0: sync your own Discogs collection; sleeve grade ([#22](https://github.com/johnzastrow/myvinyl/issues/22), [#10](https://github.com/johnzastrow/myvinyl/issues/10))
 - [x] Discogs API terms reviewed: not applied, personal non-public use ([#18](https://github.com/johnzastrow/myvinyl/issues/18))
