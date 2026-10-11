@@ -27,6 +27,7 @@ Legend: **(decision)** needs an answer before work starts.
 ## Ideas, not scheduled
 - [ ] Condition-based price suggestions from Discogs ([#9](https://github.com/johnzastrow/myvinyl/issues/9))
 - [ ] Reports as a downloadable PDF ([#11](https://github.com/johnzastrow/myvinyl/issues/11))
+- [ ] Detailed printable report: full details for each album ([#27](https://github.com/johnzastrow/myvinyl/issues/27))
 - [ ] CSV import ([#12](https://github.com/johnzastrow/myvinyl/issues/12))
 - [ ] Shelf location and duplicate copies ([#13](https://github.com/johnzastrow/myvinyl/issues/13))
 - [ ] Pagination for very large collections ([#14](https://github.com/johnzastrow/myvinyl/issues/14))
