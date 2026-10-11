@@ -117,6 +117,30 @@ class FakeService:
             return (release_id, *self.wish_price[1:])
         return self.wish_price
 
+    # Discogs collection sync (the linked account's own collection).
+    discogs_fields = {1: "Media Condition", 2: "Sleeve Condition", 3: "Notes"}
+    discogs_folders = [{"id": 1, "name": "Uncategorized"}, {"id": 7, "name": "Jazz"}]
+
+    def collection_fields(self, username):
+        self.synced_username = username
+        return self.discogs_fields
+
+    def collection_folders(self, username):
+        return self.discogs_folders
+
+    def collection_page(self, username, page):
+        pages = getattr(self, "discogs_pages", [[]])
+        failure = getattr(self, "page_error", {}).pop(page, None)
+        if failure:
+            raise failure
+        return len(pages), pages[page - 1]
+
+    def enrich_pinned(self, release_id):
+        self.light_calls = getattr(self, "light_calls", []) + [release_id]
+        return dataclasses.replace(
+            self.result, release_id=release_id, pressings=self.result.pressings[:1]
+        )
+
     def identity(self):
         if self.identity_error:
             raise self.identity_error

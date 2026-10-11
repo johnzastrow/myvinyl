@@ -331,3 +331,85 @@ def test_main_starts_uvicorn_on_localhost(monkeypatch):
     entry.main()
     assert seen["app"] == "myvinyl.main:app_from_env" and seen["factory"] is True
     assert seen["host"] == "127.0.0.1" and seen["server_header"] is False
+
+
+def test_jobs_run_by_priority():
+    gate, started = threading.Event(), threading.Event()
+    seen = []
+
+    def process(job):
+        started.set()
+        gate.wait(5)
+        seen.append(job)
+
+    q = JobQueue(process)
+    q.start()
+    q.submit("first")
+    assert started.wait(5)
+    q.submit("bulk", priority=2)
+    q.submit("normal", priority=1)
+    q.submit("click", priority=0)
+    gate.set()
+    q.stop()
+    assert seen == ["first", "click", "normal", "bulk"]
+
+
+class HeaderResp(Resp):
+    def __init__(self, body, remaining):
+        super().__init__(body)
+        self.headers = {"X-Discogs-Ratelimit-Remaining": remaining}
+
+
+@pytest.mark.parametrize(("remaining", "held"), [("1", True), ("40", False), ("x", False)])
+def test_client_pauses_when_discogs_says_nearly_out(monkeypatch, no_sleep, remaining, held):
+    holds = []
+    client = discogs.DiscogsClient()
+    monkeypatch.setattr(client._pacer, "hold", holds.append)
+    monkeypatch.setattr(
+        discogs.urllib.request, "urlopen", lambda req, timeout: HeaderResp(b"{}", remaining)
+    )
+    client.get("/releases/1")
+    assert holds == ([discogs.LOW_REMAINING_PAUSE] if held else [])
+
+
+def test_pacer_hold_delays_next_request(monkeypatch):
+    clock = [50.0]
+    slept = []
+    monkeypatch.setattr(discogs.time, "monotonic", lambda: clock[0])
+    monkeypatch.setattr(discogs.time, "sleep", slept.append)
+    pacer = discogs.Pacer(60)
+    pacer.hold(15)
+    pacer.wait_turn()
+    assert slept == [pytest.approx(15.0)]
+
+
+def test_collection_api_functions():
+    client = FakeClient(
+        {
+            "/users/fan/collection/folders": {
+                "folders": [{"id": 0, "name": "All"}, {"id": 3, "name": ""}, {"id": "x"}, "junk"]
+            },
+            "/users/fan/collection/fields": {
+                "fields": [{"id": 1, "name": "Media Condition"}, {"name": "no id"}]
+            },
+            "/users/fan/collection/folders/0/releases": {
+                "pagination": {"pages": 4},
+                "releases": [{"instance_id": 1}, "junk"],
+            },
+            "/marketplace/stats/9": stats(10.0),
+            "/releases/9": {"title": "X", "year": 1990},
+        }
+    )
+    assert discogs.collection_folders(client, "fan") == [
+        {"id": 0, "name": "All"},
+        {"id": 3, "name": "Folder 3"},
+    ]
+    assert discogs.collection_fields(client, "fan") == {1: "Media Condition"}
+    assert discogs.collection_page(client, "fan", 2) == (4, [{"instance_id": 1}])
+    assert client.calls[-1][1]["page"] == "2"
+    with pytest.raises(ValueError):
+        discogs.collection_fields(client, "bad name!")
+    light = discogs.enrich_pinned(client, 9)
+    assert light.release_id == 9 and light.value_cents == light.low_cents == 1000
+    service = discogs.DiscogsService(client, True)
+    assert service.collection_fields("fan") == {1: "Media Condition"}

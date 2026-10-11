@@ -138,6 +138,7 @@ def parse_album(form: Mapping) -> tuple[dict, dict[str, str], dict[str, str]]:
         "label": values["label"],
         "format": values["format"],
         "condition": values["condition"],
+        "sleeve_condition": values["sleeve_condition"],
         "notes": values["notes"],
         "value_cents": value_cents,
         "purchase_cents": purchase_cents,
