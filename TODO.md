@@ -29,7 +29,7 @@ Decided 2026-10-11: one token per user, entered in the web UI instead of `.env`.
       Discogs lookups, prices, or imports, and the UI says how to add one.
 - [ ] Admins keep seeing and changing every collection, as today, but never see anyone's
       token.
-- [ ] (decision) Can admins clear a user's token (for example after a leak)?
+- [ ] Admins can clear any user's token (for example after a leak); they never see it.
 
 ### Security follow-ups (see SECURITY.md)
 - [ ] (decision) Second factor (TOTP), or put the site behind Caddy forward-auth or a VPN.
