@@ -13,6 +13,14 @@ stack in `~/myvinyldocker`, container `myvinyl` on `127.0.0.1:8094`).
       `/etc/caddy/Caddyfile.pre-myvinyl`).
 - [x] Generated admin password changed; `ADMIN_PASSWORD.txt` deleted.
 - [ ] Optional: set `MYVINYL_DISCOGS_TOKEN` in `~/myvinyldocker/.env`, then `docker compose up -d`.
+
+### Discogs token in the app (decision)
+- [ ] Let users enter a Discogs personal access token in the web UI instead of editing
+      `.env` and restarting. Decide: one shared token set by an admin, or a per-user token
+      (each user's own rate limit). The token is a secret: store it encrypted at rest (key
+      from the environment), never echo it back in full (show only the last 4 characters),
+      require the current password to change it, and keep `MYVINYL_DISCOGS_TOKEN` as the
+      fallback.
 - [ ] Copy `/data/backups` off the server (cron + rsync or similar).
 - [ ] Optional: pin the Docker base images by digest.
 
