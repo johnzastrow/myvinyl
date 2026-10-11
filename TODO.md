@@ -20,11 +20,16 @@ stack in `~/myvinyldocker`, container `myvinyl` on `127.0.0.1:8094`).
 Decided 2026-10-11: one token per user, entered in the web UI instead of `.env`.
 - [ ] Profile page field for the user's own Discogs personal access token; that user's
       lookups, price checks, and imports use it (their own Discogs rate limit).
-- [ ] Treat it as a secret: encrypted at rest (key from the environment), shown only as
-      the last 4 characters, current password required to set, change, or remove it,
-      never logged.
+- [ ] Treat it as a secret: encrypted at rest with AES-256-GCM from the standard
+      `cryptography` package (key in a new `.env` setting, kept apart from the database;
+      losing the key means users re-enter their tokens), shown only as the last 4
+      characters, current password required to set, change, or remove it, never logged.
 - [ ] Background jobs (weekly refresh, wishlist checks) run with the album owner's token.
-- [ ] `MYVINYL_DISCOGS_TOKEN` stays as the fallback for users without their own token.
+- [ ] No shared token: remove `MYVINYL_DISCOGS_TOKEN`. A user without a token gets no
+      Discogs lookups, prices, or imports, and the UI says how to add one.
+- [ ] Admins keep seeing and changing every collection, as today, but never see anyone's
+      token.
+- [ ] (decision) Can admins clear a user's token (for example after a leak)?
 
 ### Security follow-ups (see SECURITY.md)
 - [ ] (decision) Second factor (TOTP), or put the site behind Caddy forward-auth or a VPN.
