@@ -21,13 +21,45 @@ Site: **https://myvinyl.fluidgrid.site**
 |---|---|
 | By barcode or catalog number (most exact) | **Add album** → type it in the top box → set the condition → **Save**. If several pressings match, pick yours. |
 | By artist and title | **Add album** → artist, title, format, condition → **Save**. |
-| From Discogs | **Import** → your Discogs username → default condition → **Import collection**. Your Discogs collection must be public. |
+| Your own Discogs collection (best) | Add your Discogs token first (see [Your Discogs collection](#your-discogs-collection)), then **Import** → **Sync my Discogs collection**. Private folders, grades, and notes come too. |
+| Someone's public Discogs collection | **Import** → **Import someone's public collection** → their Discogs username → default condition → **Import collection**. |
 
 - Leave **Street value** blank and myvinyl looks it up on Discogs. A lookup takes about
   12 to 30 seconds, and the album page refreshes itself until it's done.
 - Fields you fill in are never overwritten. Blank label and year are filled from Discogs.
 - Wrong barcode, or added without one? **Edit** → change **Barcode or catalog number**
   → **Save**. The pressing is looked up again, just as on Add.
+
+### Your Discogs collection
+With your own Discogs token, myvinyl reads your Discogs collection, including private
+folders, and keeps it in step. It only reads from Discogs; it never changes anything there.
+
+1. **Add your token:** on Discogs, Settings → Developers → **Generate new token**. In
+   myvinyl, your name (top right) → **Discogs token** → paste it, enter your password,
+   **Save token**. myvinyl shows which Discogs account it belongs to.
+2. **Sync:** **Import** → choose a condition for copies that have no grade on Discogs →
+   **Sync my Discogs collection**. The page shows progress and refreshes itself.
+3. **What comes across:** every copy in every folder (two copies of a record become two
+   albums), its folder, Discogs' **Media Condition** and **Sleeve Condition**, the
+   **Notes** field, your star rating, and the date you added it. Only vinyl is imported.
+4. **Prices:** each new album gets a quick price for your exact pressing right away. The
+   range across other pressings fills in automatically over the next few hours.
+5. **Sync again** any time to pick up changes. The rules:
+   - Discogs decides which copies you have, their folders, and dates added.
+   - myvinyl decides grades, notes, and ratings. A change made on Discogs is copied here
+     only if you haven't changed that field here since the last sync.
+   - Changed in both places? It goes on the **Discogs sync** page for you to choose
+     **Keep mine** or **Use Discogs** (or the same for all at once).
+   - Gone from Discogs? Listed on the same page: **Move to trash** or **Keep it here**.
+     Nothing is removed without you.
+   - Albums you already had here for the same pressing are matched, not duplicated.
+   - Something you put in the trash here isn't brought back by a sync.
+6. **If a sync stops** (network trouble, or the server restarted), **Resume sync** on the
+   Import page continues where it left off.
+
+A notice on your collection page tells you when a sync found something to decide. The
+**Discogs sync** page (link on the Import page) also lists recent activity. Filter your
+collection by **Discogs folder** with the folder menu in the filter bar.
 
 ### The album page
 | Section | What you can do |
@@ -41,10 +73,12 @@ Site: **https://myvinyl.fluidgrid.site**
 | Album art | Click an image to make it the displayed cover, or **Use your own image** to upload one (JPEG, PNG, WebP, or GIF, up to 5 MB). Your upload stays until you remove it or click a Discogs image. |
 | Notes | Add dated notes: cleanings, plays, where you found it. |
 | Purchase | **Edit** → price paid, date, where bought. Gain or loss is calculated for you. |
+| Record and sleeve grades | **Edit** → **Condition (record)** and **Sleeve condition** (Goldmine grades; a sleeve can also be Generic or No cover, or left Not graded). |
+| Discogs chips | Folder name and "in your Discogs collection" show for albums linked to your Discogs collection. |
 
 ### Finding and reporting
 - **Filter bar** (collection and Stats pages): search text, genre, decade, format,
-  condition, minimum rating, value range. **Clear** resets it.
+  condition, minimum rating, Discogs folder (after a sync), value range. **Clear** resets it.
 - **List / Covers** switches between the table and a cover grid. Click a column header to sort.
 - **Stats:** breakdowns by genre, decade, format, condition, label, and rating.
 - **Print report:** a printable list of the current (filtered) view. Use your browser's
@@ -65,6 +99,9 @@ Site: **https://myvinyl.fluidgrid.site**
 ### Your profile
 Click your name (top right):
 - **Display name, About, Discogs username** (pre-fills the import forms).
+- **Discogs token:** add, replace, or remove your own token (needs your password). It
+  links your Discogs account for syncing and speeds up lookups. Only its last 4
+  characters are shown, and admins can't see it.
 - **Username and email:** change either one; this needs your current password. Your
   albums and settings stay the same. Email is optional and not used yet (it's kept for
   future email notices and password resets).
@@ -90,7 +127,7 @@ so give the role only to people you'd trust with everything.
 | Reset a password | **Reset password** on their row → send the one-time link. Using it signs them out everywhere. |
 | Disable an account | **Disable** on their row. They're signed out at once and can't log in; their data is kept. **Enable** restores access. |
 | Cancel an unused link | **Open links** → **Revoke**. |
-| Work in someone's collection | **View collection** on their row. A red banner shows whose collection you're in; anything you add or import goes there. **Back to mine** to leave. |
+| Work in someone's collection | **View collection** on their row. A red banner shows whose collection you're in; anything you add or import goes there. **Back to mine** to leave. Discogs sync isn't available while viewing someone else's collection: it only ever reads the signed-in user's own Discogs account. |
 
 Notes:
 - You can't disable yourself, and the last active admin can't be disabled or demoted.

@@ -2,7 +2,39 @@
 
 All notable changes to myvinyl. Versions follow [semantic versioning](https://semver.org/).
 
-## Unreleased
+## 0.9.0 - 2026-10-11
+
+### Added
+- **Sync your own Discogs collection** ([#22](https://github.com/johnzastrow/myvinyl/issues/22),
+  plan in [#20](https://github.com/johnzastrow/myvinyl/issues/20)). With your token on the
+  Profile page, **Import → Sync my Discogs collection** brings in every copy in every
+  folder, including private ones, with its folder, Media and Sleeve Condition, Notes,
+  rating, and date added. Re-sync any time. Discogs decides which copies you own, their
+  folders, and dates; myvinyl decides grades, notes, and ratings. Fields changed in both
+  places, and copies gone from Discogs, are listed on the new **Discogs sync** page for
+  you to decide; nothing is removed automatically. Interrupted syncs can be resumed.
+  Read-only: nothing is written to Discogs.
+- **Sleeve grade** ([#10](https://github.com/johnzastrow/myvinyl/issues/10)): a separate
+  sleeve condition (Goldmine grades, Generic, No cover, or not graded) on the album form,
+  album page, and CSV export.
+- **Discogs folders:** a folder filter on the collection and Stats pages; folder and date
+  added on the album page and in the CSV export.
+
+### Changed
+- Albums from a sync get a quick lookup of your exact pressing (2 Discogs requests instead
+  of about 12); the full range across pressings fills in through the hourly refresh.
+- Background Discogs work runs by priority: what you click first, bulk syncs and
+  refreshes last. myvinyl reads Discogs' remaining-requests header and pauses before
+  running out.
+- The Import page's public-collection import is now labelled for other people's
+  collections; its outdated note about a server token is gone.
+
+### Upgrade notes
+- New columns on `albums` and `users` and new tables (`discogs_folders`, `sync_runs`,
+  `sync_items`, `sync_log`) are added automatically on startup.
+- Users who added a token before 0.9.0 should save it again (Profile → Discogs token) to
+  link their Discogs account for syncing.
+
 
 ### Tests
 - Coverage raised from 89% (lines) to 96% (lines and branches)

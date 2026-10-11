@@ -40,6 +40,9 @@ For day-to-day instructions, see the **[User Guide](USERGUIDE.md)**.
 - **Albums:** artist, title, year, label, format (LP, 2xLP, EP, 7", 10", 12" single,
   box set), condition on the Goldmine scale (M through P), street value, purchase price,
   date and place bought, and notes.
+- **Sync your own Discogs collection** with your token: private folders, record and
+  sleeve grades, notes, ratings, and dates added; re-sync any time, with changes made
+  in both places and copies gone from Discogs shown for you to decide. Read-only.
 - **Add by barcode or catalog number** for an exact Discogs match. If several pressings
   share a barcode (for example black and colored vinyl), you choose one.
 - **Import your Discogs collection** (and Discogs star ratings) in one step.
@@ -375,6 +378,11 @@ myvinyl/
 ## Changelog
 
 The full history is in [CHANGELOG.md](CHANGELOG.md).
+
+### 0.9.0 - 2026-10-11
+- **Added:** sync your own Discogs collection (#22): private folders, grades, notes,
+  ratings, dates; three-way rules with a review page; resumable. Separate sleeve grade
+  (#10). Folder filter. Faster first prices for synced albums.
 
 ### 0.8.0 - 2026-10-11
 - **Changed:** each user enters their own Discogs token on the Profile page (#3). Tokens

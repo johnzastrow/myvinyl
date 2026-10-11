@@ -36,6 +36,16 @@ re-checked and still hold. No Critical or High findings.
 - **Fix:** Tokens of disabled accounts are never used, the cached client is dropped on
   disable, and scheduled refreshes skip disabled owners' albums and wishes.
 
+### Discogs collection sync (0.9.0)
+- Private Discogs data is read only for the Discogs account a user's own token belongs to
+  (`/oauth/identity`, recorded when the token is saved), never for a username typed into
+  a form, and never while an admin is viewing someone else's collection.
+- Sync is read-only toward Discogs. Review items and runs are scoped to their owner (404
+  otherwise); every resolution is logged. One sync runs per user at a time; pages are
+  capped at 200 (20,000 copies, the album cap).
+- Discogs responses are type-checked and length-limited before use; dynamic SQL in the
+  sync code uses only allowlisted column names with bound values.
+
 ### Notes
 - Decrypted tokens are cached in process memory while in use (one process). Losing or
   changing `MYVINYL_TOKEN_KEY` makes stored tokens unreadable; users fall back to
