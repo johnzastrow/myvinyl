@@ -72,3 +72,14 @@ def test_every_page_help_link_has_a_target(authed, lookup):
 
 def test_help_page_has_no_page_help_link(authed):
     assert "Help for this page" not in authed.get("/help").text
+
+
+def test_guide_screenshots_exist_and_are_served(authed):
+    html = "".join(part.html for part in guide.load().values())
+    images = re.findall(r'<img src="\.\./static/guide/([^"]+)"', html)
+    assert images, "the guide should have screenshots"
+    assert 'loading="lazy"' in html
+    for name in images:
+        assert (guide.GUIDE_DIR.parent / "static" / "guide" / name).is_file(), name
+        r = authed.get(f"/static/guide/{name}")
+        assert r.status_code == 200 and r.headers["content-type"] == "image/png", name

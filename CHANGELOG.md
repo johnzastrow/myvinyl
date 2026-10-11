@@ -9,6 +9,9 @@ All notable changes to myvinyl. Versions follow [semantic versioning](https://se
   in the menu opens the guide for the running version, with a contents list. Most pages
   have a **Help for this page** link to the matching section. Admins also see the admin
   section; members don't.
+- **Screenshots in the guide:** a new set taken from a demo collection (no real data) for
+  each section, loaded as you scroll. The README uses the same images, which replace the
+  0.6.0 set in `docs/screenshots/`.
 
 ### Changed
 - The guide now lives in the package as Markdown (`src/myvinyl/guide/using.md` and

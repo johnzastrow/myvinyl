@@ -2,6 +2,9 @@ myvinyl keeps an inventory of your vinyl records, with values, art, and details 
 up on Discogs. Each section below covers one part of the site; the **Help** links on
 the pages bring you to the matching section.
 
+![The collection page: a table of albums with cover thumbnails, values, and a filter bar above it](../static/guide/collection.png)
+*Your collection, with the filter bar and the List / Covers switch.*
+
 ## Getting started
 1. Open the invite link the admin sent you. It works once and expires after 7 days.
 2. Choose a username (3 to 32 letters, digits, `.`, `-`, or `_`), an optional email
@@ -21,6 +24,9 @@ the pages bring you to the matching section.
 - Fields you fill in are never overwritten. Blank label and year are filled from Discogs.
 - Wrong barcode, or added without one? **Edit** → change **Barcode or catalog number**
   → **Save**. The pressing is looked up again, just as on Add.
+
+![The Add album form: a barcode or catalog number box at the top, then artist, title, format, record and sleeve condition, value, label, and purchase fields](../static/guide/add.png)
+*Add album. A barcode or catalog number gives the most exact match.*
 
 ## Your Discogs collection
 With your own Discogs token, myvinyl reads your Discogs collection, including private
@@ -53,6 +59,12 @@ A notice on your collection page tells you when a sync found something to decide
 **Discogs sync** page (link on the Import page) also lists recent activity. Filter your
 collection by **Discogs folder** with the folder menu in the filter bar.
 
+![The Import page's Discogs section: the linked Discogs account, a condition menu, the Sync my Discogs collection button, and the result of the last sync](../static/guide/import.png)
+*Import: sync your Discogs collection and see the result of the last sync.*
+
+![The Discogs sync page: a record grade changed in both places with Keep mine and Use Discogs buttons, an album gone from Discogs with Move to trash and Keep it here buttons, and recent activity](../static/guide/sync-review.png)
+*The Discogs sync page: things to decide, and recent activity.*
+
 ## The album page
 | Section | What you can do |
 |---|---|
@@ -68,6 +80,9 @@ collection by **Discogs folder** with the folder menu in the filter bar.
 | Record and sleeve grades | **Edit** → **Condition (record)** and **Sleeve condition** (Goldmine grades; a sleeve can also be Generic or No cover, or left Not graded). |
 | Discogs chips | Folder name and "in your Discogs collection" show for albums linked to your Discogs collection. |
 
+![An album page: cover, chips for year, format, grades and Discogs folder, street value and range, purchase and gain, rating, and the value-history chart](../static/guide/album.png)
+*An album page: value and range, grades, purchase, rating, and value history.*
+
 ## Finding and reporting
 - **Filter bar** (collection and Stats pages): search text, genre, decade, format,
   condition, minimum rating, Discogs folder (after a sync), value range. **Clear** resets it.
@@ -77,16 +92,31 @@ collection by **Discogs folder** with the folder menu in the filter bar.
   Print (Ctrl+P or Cmd+P); choose "Save as PDF" for a file.
 - **Export CSV:** a spreadsheet of the current view.
 
+![The cover grid view of the collection](../static/guide/grid.png)
+*Covers view.*
+
+![The Stats page: totals and breakdowns by genre, decade, format, condition, label, and rating](../static/guide/stats.png)
+*Stats for the whole collection or the current filter.*
+
+![The printable report: a table of albums with totals at the top](../static/guide/report.png)
+*Print report.*
+
 ## Wishlist
 - **Wishlist** → add artist, title, and an optional target price. myvinyl checks the
   lowest Discogs price weekly and highlights records at or below your target.
 - **Import wantlist** pulls in your public Discogs wantlist.
 - **Got it:** choose the condition, enter what you paid, and the record moves to your collection.
 
+![The Wishlist page: wanted records with target prices and current lowest prices, and forms to add a record or import a wantlist](../static/guide/wishlist.png)
+*Wishlist with target prices.*
+
 ## Deleting and restoring
 - **Edit** → **Move this album to the trash**.
 - **Trash** → **Restore** puts it back; **Delete forever** removes it. Albums left in the
   trash are deleted automatically after 30 days.
+
+![The Trash page listing a deleted album with Restore and Delete forever buttons](../static/guide/trash.png)
+*Trash.*
 
 ## Your profile
 Click your name (top right):
@@ -102,3 +132,6 @@ Click your name (top right):
 - **Sign out everywhere**, if you used a shared or lost device.
 
 Forgot your password? Ask an admin for a reset link.
+
+![The Profile page: display name, about, Discogs username, theme, change password, Discogs token with the linked account, and username and email](../static/guide/profile.png)
+*Profile, including your Discogs token.*

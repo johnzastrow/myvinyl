@@ -1,10 +1,14 @@
 ## Administering the site
 
 This part is shown only to admins.
+
 Admins see an **Admin** link in the menu. Admins can see and change every collection,
 so give the role only to people you'd trust with everything.
 
 ### Managing users
+![The Admin page: a users table with roles, status, Discogs token column, and actions, plus invite and backup panels](../static/guide/admin.png)
+*Admin: users, invites, and backups.*
+
 | Task | How |
 |---|---|
 | Invite someone | **Admin** → **Invite someone** → choose **member** or **admin** → **Create invite link** → send the link privately. It is shown only once. |

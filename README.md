@@ -9,7 +9,7 @@
   values, price ranges and history, release details, and album art from Discogs.
 </p>
 
-![Collection page](docs/screenshots/collection.png)
+![Collection page](src/myvinyl/static/guide/collection.png)
 
 ---
 
@@ -115,29 +115,37 @@ when the system is in dark mode).
 
 | Collection (Royal) | Cover grid |
 |---|---|
-| ![Collection](docs/screenshots/collection.png) | ![Cover grid](docs/screenshots/grid.png) |
+| ![Collection](src/myvinyl/static/guide/collection.png) | ![Cover grid](src/myvinyl/static/guide/grid.png) |
 
 | Light theme | Gray theme | Navy theme |
 |---|---|---|
-| ![Light](docs/screenshots/theme-light.png) | ![Gray](docs/screenshots/theme-gray.png) | ![Navy](docs/screenshots/theme-navy.png) |
+| ![Light](src/myvinyl/static/guide/theme-light.png) | ![Gray](src/myvinyl/static/guide/theme-gray.png) | ![Navy](src/myvinyl/static/guide/theme-navy.png) |
 
 **Album page:** street value, range across pressings, community stats, purchase and gain,
 value history chart, rating and review, album art chooser, dated notes, Discogs details,
 pressings with **Mine** buttons, tracklist with your track ratings, credits, and notes.
 
-![Album page](docs/screenshots/album.png)
+![Album page](src/myvinyl/static/guide/album.png)
 
 | Stats | Printed report |
 |---|---|
-| ![Stats](docs/screenshots/stats.png) | ![Report](docs/screenshots/report.png) |
+| ![Stats](src/myvinyl/static/guide/stats.png) | ![Report](src/myvinyl/static/guide/report.png) |
+
+| Discogs sync | Sync review |
+|---|---|
+| ![Import and sync](src/myvinyl/static/guide/import.png) | ![Sync review](src/myvinyl/static/guide/sync-review.png) |
+
+| In-app guide | Trash |
+|---|---|
+| ![Help](src/myvinyl/static/guide/help.png) | ![Trash](src/myvinyl/static/guide/trash.png) |
 
 | Wishlist | Admin |
 |---|---|
-| ![Wishlist](docs/screenshots/wishlist.png) | ![Admin](docs/screenshots/admin.png) |
+| ![Wishlist](src/myvinyl/static/guide/wishlist.png) | ![Admin](src/myvinyl/static/guide/admin.png) |
 
 | Add album | Profile and themes | Log in | Phone |
 |---|---|---|---|
-| ![Add](docs/screenshots/add.png) | ![Profile](docs/screenshots/profile.png) | ![Login](docs/screenshots/login.png) | ![Phone](docs/screenshots/mobile.png) |
+| ![Add](src/myvinyl/static/guide/add.png) | ![Profile](src/myvinyl/static/guide/profile.png) | ![Login](src/myvinyl/static/guide/login.png) | ![Phone](src/myvinyl/static/guide/mobile.png) |
 
 ---
 
@@ -368,10 +376,10 @@ myvinyl/
 │   ├── guide.py         # Renders the in-app user guide
 │   ├── guide/           # User guide in Markdown (using.md, admin.md)
 │   ├── templates/       # Jinja2 pages
-│   └── static/          # style.css (themes), logo, favicons
+│   └── static/          # style.css (themes), logo, favicons, guide/ screenshots
 ├── tests/               # pytest suite
 ├── deploy/              # DEPLOY.md, OPERATIONS.md, Caddy site block, env template
-├── docs/screenshots/    # Images used in this README
+├── src/myvinyl/static/guide/    # Images used in this README
 ├── Dockerfile, compose.yaml
 ├── USERGUIDE.md, SECURITY.md, CHANGELOG.md, TODO.md
 └── pyproject.toml, uv.lock
@@ -384,7 +392,8 @@ myvinyl/
 The full history is in [CHANGELOG.md](CHANGELOG.md).
 
 ### 0.10.0 - 2026-10-11
-- **Added:** in-app user guide (**Help** in the menu, plus a link on each page) (#21).
+- **Added:** in-app user guide with screenshots (**Help** in the menu, plus a link on each
+  page) (#21).
   Server operations moved to `deploy/OPERATIONS.md`.
 
 ### 0.9.0 - 2026-10-11
