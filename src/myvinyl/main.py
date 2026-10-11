@@ -1403,6 +1403,8 @@ def create_app(
         else:
             threading.Thread(target=work, name=f"discogs-sync-{run_id}", daemon=True).start()
 
+    sync_lock = threading.Lock()
+
     def own_linked_account(request: Request) -> None:
         """Private Discogs data is only read for your own linked account, never while an
         admin is viewing someone else's collection."""
@@ -1424,9 +1426,12 @@ def create_app(
             return import_page_response(
                 request, 422, errors={"sync_condition": "Choose a condition."}
             )
-        latest = db.latest_sync_run(path, request.state.user["id"])
-        if latest is None or latest["state"] != "running":
-            run_id = db.create_sync_run(path, request.state.user["id"], condition)
+        with sync_lock:  # one sync per user, even if the button is pressed twice
+            latest = db.latest_sync_run(path, request.state.user["id"])
+            run_id = None
+            if latest is None or latest["state"] != "running":
+                run_id = db.create_sync_run(path, request.state.user["id"], condition)
+        if run_id is not None:
             log.info("user %s started Discogs sync %s", request.state.user["id"], run_id)
             start_sync(request, run_id)
         return RedirectResponse("/import#discogs", status_code=303)
@@ -1439,8 +1444,11 @@ def create_app(
         latest = db.latest_sync_run(path, request.state.user["id"])
         if run is None or latest is None or run["id"] != latest["id"]:
             raise HTTPException(status_code=404)
-        if run["state"] in ("interrupted", "error"):
-            db.update_sync_run(path, run_id, state="running", message="")
+        with sync_lock:
+            resume = db.get_sync_run(path, run_id)["state"] in ("interrupted", "error")
+            if resume:
+                db.update_sync_run(path, run_id, state="running", message="")
+        if resume:
             start_sync(request, run_id)
         return RedirectResponse("/import#discogs", status_code=303)
 
