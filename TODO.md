@@ -13,16 +13,18 @@ stack in `~/myvinyldocker`, container `myvinyl` on `127.0.0.1:8094`).
       `/etc/caddy/Caddyfile.pre-myvinyl`).
 - [x] Generated admin password changed; `ADMIN_PASSWORD.txt` deleted.
 - [ ] Optional: set `MYVINYL_DISCOGS_TOKEN` in `~/myvinyldocker/.env`, then `docker compose up -d`.
-
-### Discogs token in the app (decision)
-- [ ] Let users enter a Discogs personal access token in the web UI instead of editing
-      `.env` and restarting. Decide: one shared token set by an admin, or a per-user token
-      (each user's own rate limit). The token is a secret: store it encrypted at rest (key
-      from the environment), never echo it back in full (show only the last 4 characters),
-      require the current password to change it, and keep `MYVINYL_DISCOGS_TOKEN` as the
-      fallback.
 - [ ] Copy `/data/backups` off the server (cron + rsync or similar).
 - [ ] Optional: pin the Docker base images by digest.
+
+### Discogs token per user
+Decided 2026-10-11: one token per user, entered in the web UI instead of `.env`.
+- [ ] Profile page field for the user's own Discogs personal access token; that user's
+      lookups, price checks, and imports use it (their own Discogs rate limit).
+- [ ] Treat it as a secret: encrypted at rest (key from the environment), shown only as
+      the last 4 characters, current password required to set, change, or remove it,
+      never logged.
+- [ ] Background jobs (weekly refresh, wishlist checks) run with the album owner's token.
+- [ ] `MYVINYL_DISCOGS_TOKEN` stays as the fallback for users without their own token.
 
 ### Security follow-ups (see SECURITY.md)
 - [ ] (decision) Second factor (TOTP), or put the site behind Caddy forward-auth or a VPN.
