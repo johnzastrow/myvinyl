@@ -2,6 +2,21 @@
 
 All notable changes to myvinyl. Versions follow [semantic versioning](https://semver.org/).
 
+## 0.10.0 - 2026-10-11
+
+### Added
+- **In-app user guide** ([#21](https://github.com/johnzastrow/myvinyl/issues/21)). **Help**
+  in the menu opens the guide for the running version, with a contents list. Most pages
+  have a **Help for this page** link to the matching section. Admins also see the admin
+  section; members don't.
+
+### Changed
+- The guide now lives in the package as Markdown (`src/myvinyl/guide/using.md` and
+  `admin.md`), rendered with `markdown-it-py` (new dependency) with raw HTML escaped.
+  `USERGUIDE.md` points to it.
+- Server operations (commands, `.env` settings, restores, Caddy, troubleshooting) moved
+  from `USERGUIDE.md` to `deploy/OPERATIONS.md`, so the in-app guide holds no server details.
+
 ## 0.9.0 - 2026-10-11
 
 ### Added

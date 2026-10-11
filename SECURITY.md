@@ -52,6 +52,13 @@ re-checked and still hold. No Critical or High findings.
 - Discogs responses are type-checked and length-limited before use; dynamic SQL in the
   sync code uses only allowlisted column names with bound values.
 
+### In-app user guide (0.10.0)
+- `/help` requires sign-in like every other page; the admin section is rendered only for
+  admins. It contains no server details (those are in `deploy/OPERATIONS.md`).
+- The guide is Markdown shipped in the package and rendered once at startup by
+  `markdown-it-py` with raw HTML disabled, so any HTML in it is escaped. It is the only
+  content marked safe for templates (`Markup`); no user input reaches it. No CSP change.
+
 ### Notes
 - Decrypted tokens are cached in process memory while in use (one process). Losing or
   changing `MYVINYL_TOKEN_KEY` makes stored tokens unreadable; users fall back to

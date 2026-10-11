@@ -20,6 +20,7 @@
   {% else %}<p class="muted">Nothing here yet.</p>{% endif %}
 </div>
 {%- endmacro %}
+{% block help %}finding-and-reporting{% endblock %}
 {% block content %}
 <h1>Stats</h1>
 {% with action="/stats" %}{% include "_filters.html" %}{% endwith %}

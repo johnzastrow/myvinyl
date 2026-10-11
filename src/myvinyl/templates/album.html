@@ -3,6 +3,7 @@
 {% block head %}
 {% if album.discogs_status == "pending" %}<meta http-equiv="refresh" content="5">{% endif %}
 {% endblock %}
+{% block help %}the-album-page{% endblock %}
 {% block content %}
 <section class="album-head">
   {% if local_cover %}

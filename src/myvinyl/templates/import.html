@@ -3,6 +3,7 @@
 {% block head %}
 {% if status.state == "running" or (run and run.state == "running") %}<meta http-equiv="refresh" content="5">{% endif %}
 {% endblock %}
+{% block help %}your-discogs-collection{% endblock %}
 {% block content %}
 <section class="narrow panel" id="discogs">
   <h1>Your Discogs collection</h1>

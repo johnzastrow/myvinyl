@@ -3,6 +3,7 @@
 {% block head %}
 {% if status.state == "running" or wishes | selectattr("discogs_status", "equalto", "pending") | list %}<meta http-equiv="refresh" content="10">{% endif %}
 {% endblock %}
+{% block help %}wishlist{% endblock %}
 {% block content %}
 <h1>Wishlist</h1>
 

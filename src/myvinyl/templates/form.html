@@ -14,6 +14,7 @@
   </select>
   {% if errors.get(name) %}<p class="error">{{ errors[name] }}</p>{% endif %}
 {%- endmacro %}
+{% block help %}adding-albums{% endblock %}
 {% block content %}
 <form class="narrow panel" method="post" action="{{ '/albums/%d' % album_id if album_id else '/albums' }}">
   <h1>{{ "Edit album" if album_id else "Add album" }}</h1>

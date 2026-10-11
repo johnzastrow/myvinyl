@@ -20,11 +20,12 @@ from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, PlainTextResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from markupsafe import Markup
 from starlette.concurrency import run_in_threadpool
 from starlette.datastructures import UploadFile
 from starlette.middleware.sessions import SessionMiddleware
 
-from . import __version__, charts, db, discogs, sync
+from . import __version__, charts, db, discogs, guide, sync
 from .albums import (
     CONDITIONS,
     FORMATS,
@@ -492,6 +493,11 @@ def create_app(
     templates.env.filters["stars"] = format_stars
     templates.env.filters["fromjson"] = json.loads
     templates.env.globals["version"] = __version__
+    # The guide is package content rendered with raw HTML escaped, so it is safe to embed.
+    help_pages = {
+        name: (Markup(part.html), part.contents)  # noqa: S704 (package Markdown, HTML escaped)
+        for name, part in guide.load().items()
+    }
     limiter = LoginLimiter()
     # Wrong current passwords on Profile forms, per account. Five within 15 minutes
     # locks those forms and signs the account out everywhere (a stolen session can't
@@ -1323,6 +1329,13 @@ def create_app(
         album_access(request, album_id)
         db.soft_delete(path, album_id)
         return RedirectResponse("/trash", status_code=303)
+
+    # --- Help --------------------------------------------------------------------------
+
+    @router.get("/help")
+    async def help_page(request: Request):
+        parts = ["using", "admin"] if request.state.user["role"] == "admin" else ["using"]
+        return render(request, "help.html", parts=[help_pages[name] for name in parts])
 
     # --- Trash -------------------------------------------------------------------------
 

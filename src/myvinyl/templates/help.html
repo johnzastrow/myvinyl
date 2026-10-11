@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Help - myvinyl{% endblock %}
+{% block content %}
+<div class="guide-layout">
+  <nav class="panel guide-contents no-print" aria-label="Guide contents">
+    <h2>Contents</h2>
+    <ul>
+      {% for html, contents in parts %}{% for anchor, text in contents %}
+      <li><a href="#{{ anchor }}">{{ text }}</a></li>
+      {% endfor %}{% endfor %}
+    </ul>
+  </nav>
+  <article class="panel guide">
+    <h1>User guide</h1>
+    <p class="muted">For myvinyl v{{ version }}.</p>
+    {% for html, contents in parts %}
+    <section>{{ html }}</section>
+    {% endfor %}
+  </article>
+</div>
+{% endblock %}

@@ -30,7 +30,9 @@
 - [Project layout](#project-layout)
 - [Changelog](#changelog)
 
-For day-to-day instructions, see the **[User Guide](USERGUIDE.md)**.
+For day-to-day instructions, open **Help** in the app (the same guide is in
+[USERGUIDE.md](USERGUIDE.md)). Server operations are in
+[deploy/OPERATIONS.md](deploy/OPERATIONS.md).
 
 ---
 
@@ -363,10 +365,12 @@ myvinyl/
 │   ├── config.py        # Environment settings (fail closed)
 │   ├── credentials.py   # Admin password hash and secret key generator
 │   ├── __main__.py      # `uv run myvinyl` entry point (log redaction, uvicorn)
+│   ├── guide.py         # Renders the in-app user guide
+│   ├── guide/           # User guide in Markdown (using.md, admin.md)
 │   ├── templates/       # Jinja2 pages
 │   └── static/          # style.css (themes), logo, favicons
 ├── tests/               # pytest suite
-├── deploy/              # DEPLOY.md, Caddy site block, env template
+├── deploy/              # DEPLOY.md, OPERATIONS.md, Caddy site block, env template
 ├── docs/screenshots/    # Images used in this README
 ├── Dockerfile, compose.yaml
 ├── USERGUIDE.md, SECURITY.md, CHANGELOG.md, TODO.md
@@ -378,6 +382,10 @@ myvinyl/
 ## Changelog
 
 The full history is in [CHANGELOG.md](CHANGELOG.md).
+
+### 0.10.0 - 2026-10-11
+- **Added:** in-app user guide (**Help** in the menu, plus a link on each page) (#21).
+  Server operations moved to `deploy/OPERATIONS.md`.
 
 ### 0.9.0 - 2026-10-11
 - **Added:** sync your own Discogs collection (#22): private folders, grades, notes,
