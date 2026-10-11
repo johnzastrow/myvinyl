@@ -8,7 +8,7 @@ Legend: **(decision)** needs an answer before work starts.
 
 ## In progress
 - [ ] Discogs integration ([#20](https://github.com/johnzastrow/myvinyl/issues/20)): plan approved 2026-10-11
-  - [ ] Phases 0+1: private collection import and sync, sleeve grade ([#22](https://github.com/johnzastrow/myvinyl/issues/22), [#10](https://github.com/johnzastrow/myvinyl/issues/10))
+  - [x] Phases 0+1: private collection import and sync, sleeve grade, 0.9.0 ([#22](https://github.com/johnzastrow/myvinyl/issues/22), [#10](https://github.com/johnzastrow/myvinyl/issues/10))
   - [ ] Phase 2: collection value and Discogs data on albums ([#23](https://github.com/johnzastrow/myvinyl/issues/23))
   - [ ] Phase 3: private wantlist sync ([#24](https://github.com/johnzastrow/myvinyl/issues/24))
   - [ ] Phase 4: discovery, gaps and Lists ([#25](https://github.com/johnzastrow/myvinyl/issues/25))
@@ -34,6 +34,7 @@ Legend: **(decision)** needs an answer before work starts.
 - [ ] Collection-wide value history chart ([#16](https://github.com/johnzastrow/myvinyl/issues/16))
 
 ## Done
+- [x] 0.9.0: sync your own Discogs collection; sleeve grade ([#22](https://github.com/johnzastrow/myvinyl/issues/22), [#10](https://github.com/johnzastrow/myvinyl/issues/10))
 - [x] Discogs API terms reviewed: not applied, personal non-public use ([#18](https://github.com/johnzastrow/myvinyl/issues/18))
 - [x] Test coverage 89% to 96% with a 94% floor ([#19](https://github.com/johnzastrow/myvinyl/issues/19))
 - [x] 0.8.0: per-user Discogs tokens, encrypted at rest; security review fixes ([#3](https://github.com/johnzastrow/myvinyl/issues/3))
