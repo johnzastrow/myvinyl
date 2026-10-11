@@ -7,11 +7,16 @@ changes to the code, repo, or docs go in both places.
 Legend: **(decision)** needs an answer before work starts.
 
 ## In progress
-- (nothing right now)
+- [ ] Discogs integration ([#20](https://github.com/johnzastrow/myvinyl/issues/20)): plan approved 2026-10-11
+  - [ ] Phases 0+1: private collection import and sync, sleeve grade ([#22](https://github.com/johnzastrow/myvinyl/issues/22), [#10](https://github.com/johnzastrow/myvinyl/issues/10))
+  - [ ] Phase 2: collection value and Discogs data on albums ([#23](https://github.com/johnzastrow/myvinyl/issues/23))
+  - [ ] Phase 3: private wantlist sync ([#24](https://github.com/johnzastrow/myvinyl/issues/24))
+  - [ ] Phase 4: discovery, gaps and Lists ([#25](https://github.com/johnzastrow/myvinyl/issues/25))
+  - [ ] Phase 5: two-way sync via Discogs OAuth, opt-in ([#26](https://github.com/johnzastrow/myvinyl/issues/26))
+  - Keep the user guide updated with each phase.
 
 ## Next up
 - [ ] In-app user guide, linked from the UI ([#21](https://github.com/johnzastrow/myvinyl/issues/21))
-- [ ] (decision) Discogs integration roadmap: more for users with a Discogs account ([#20](https://github.com/johnzastrow/myvinyl/issues/20))
 - [ ] Token key rotation ([#17](https://github.com/johnzastrow/myvinyl/issues/17))
 - [ ] Copy automatic backups off the server ([#6](https://github.com/johnzastrow/myvinyl/issues/6))
 - [ ] Pin the Docker base images by digest ([#7](https://github.com/johnzastrow/myvinyl/issues/7))
@@ -21,7 +26,6 @@ Legend: **(decision)** needs an answer before work starts.
 
 ## Ideas, not scheduled
 - [ ] Condition-based price suggestions from Discogs ([#9](https://github.com/johnzastrow/myvinyl/issues/9))
-- [ ] Separate sleeve grade ([#10](https://github.com/johnzastrow/myvinyl/issues/10))
 - [ ] Reports as a downloadable PDF ([#11](https://github.com/johnzastrow/myvinyl/issues/11))
 - [ ] CSV import ([#12](https://github.com/johnzastrow/myvinyl/issues/12))
 - [ ] Shelf location and duplicate copies ([#13](https://github.com/johnzastrow/myvinyl/issues/13))
