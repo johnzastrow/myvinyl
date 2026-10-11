@@ -7,14 +7,6 @@ changes to the code, repo, or docs go in both places.
 Legend: **(decision)** needs an answer before work starts.
 
 ## In progress
-- [ ] Per-user Discogs tokens, encrypted at rest, release 0.8.0 ([#3](https://github.com/johnzastrow/myvinyl/issues/3))
-  - [x] Token encryption (AES-256-GCM) and `MYVINYL_TOKEN_KEY`
-  - [x] Profile page: add, replace, remove (password required, verified with Discogs)
-  - [x] Discogs work uses the collection owner's token, else anonymous access
-  - [x] Admin: set/none column and Clear
-  - [x] Security review fixes (VULN-008 to 010)
-  - [x] Tests and docs
-  - [ ] Merge, add the key on the server, deploy, release
 - [ ] Increase test coverage across the app ([#19](https://github.com/johnzastrow/myvinyl/issues/19))
 
 ## Next up
@@ -38,6 +30,7 @@ Legend: **(decision)** needs an answer before work starts.
 - [ ] Collection-wide value history chart ([#16](https://github.com/johnzastrow/myvinyl/issues/16))
 
 ## Done
+- [x] 0.8.0: per-user Discogs tokens, encrypted at rest; security review fixes ([#3](https://github.com/johnzastrow/myvinyl/issues/3))
 - [x] 0.7.0: upload your own cover ([#1](https://github.com/johnzastrow/myvinyl/issues/1)); edit the barcode or catalog number ([#2](https://github.com/johnzastrow/myvinyl/issues/2))
 - [x] 0.6.1: change usernames, optional email per account, version footer, user guide
 - [x] 0.6.0: multiple users, admin, invites, profiles, themes, trash, purchases, notes,
