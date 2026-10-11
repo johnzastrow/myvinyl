@@ -18,8 +18,8 @@ re-checked and still hold. No Critical or High findings.
 | VULN-008 | Current-password checks on Profile forms had no rate limit: a stolen session could guess the password, and any member could tie up the Argon2 slots logins use | Medium | Fixed |
 | VULN-009 | An admin viewing another collection ran imports and barcode searches with that user's Discogs token (could import their private Discogs collection) | Low | Fixed |
 | VULN-010 | A disabled account's Discogs token kept being used by scheduled refreshes | Low | Fixed |
-| C-1 | Discogs API terms may limit how long marketplace prices are shown (prices refresh weekly) | Compliance | Open, [#18](https://github.com/johnzastrow/myvinyl/issues/18) |
-| C-2 | The app lacks the "not affiliated with Discogs" notice the API terms ask for | Compliance | Open, [#18](https://github.com/johnzastrow/myvinyl/issues/18) |
+| C-1 | Discogs API terms may limit how long marketplace prices are shown (prices refresh weekly) | Compliance | Accepted: personal, non-public use ([#18](https://github.com/johnzastrow/myvinyl/issues/18)) |
+| C-2 | The app lacks the "not affiliated with Discogs" notice the API terms ask for | Compliance | Accepted: personal, non-public use ([#18](https://github.com/johnzastrow/myvinyl/issues/18)) |
 
 #### VULN-008: Unthrottled password re-checks (Medium, fixed)
 - **Fix:** Every current-password check (Discogs token, username/email, password change)

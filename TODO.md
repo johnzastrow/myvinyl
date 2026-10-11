@@ -10,7 +10,7 @@ Legend: **(decision)** needs an answer before work starts.
 - (nothing right now)
 
 ## Next up
-- [ ] (decision) Discogs API terms: price freshness and the "not affiliated" notice ([#18](https://github.com/johnzastrow/myvinyl/issues/18))
+- [ ] In-app user guide, linked from the UI ([#21](https://github.com/johnzastrow/myvinyl/issues/21))
 - [ ] (decision) Discogs integration roadmap: more for users with a Discogs account ([#20](https://github.com/johnzastrow/myvinyl/issues/20))
 - [ ] Token key rotation ([#17](https://github.com/johnzastrow/myvinyl/issues/17))
 - [ ] Copy automatic backups off the server ([#6](https://github.com/johnzastrow/myvinyl/issues/6))
@@ -30,6 +30,7 @@ Legend: **(decision)** needs an answer before work starts.
 - [ ] Collection-wide value history chart ([#16](https://github.com/johnzastrow/myvinyl/issues/16))
 
 ## Done
+- [x] Discogs API terms reviewed: not applied, personal non-public use ([#18](https://github.com/johnzastrow/myvinyl/issues/18))
 - [x] Test coverage 89% to 96% with a 94% floor ([#19](https://github.com/johnzastrow/myvinyl/issues/19))
 - [x] 0.8.0: per-user Discogs tokens, encrypted at rest; security review fixes ([#3](https://github.com/johnzastrow/myvinyl/issues/3))
 - [x] 0.7.0: upload your own cover ([#1](https://github.com/johnzastrow/myvinyl/issues/1)); edit the barcode or catalog number ([#2](https://github.com/johnzastrow/myvinyl/issues/2))
