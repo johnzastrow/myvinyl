@@ -2,6 +2,16 @@
 
 All notable changes to myvinyl. Versions follow [semantic versioning](https://semver.org/).
 
+## Unreleased
+
+### Tests
+- Coverage raised from 89% (lines) to 96% (lines and branches)
+  ([#19](https://github.com/johnzastrow/myvinyl/issues/19)): job queue and periodic tasks
+  on real threads, the Discogs client (429 retry, size cap, bad responses, pacing),
+  collection/wantlist paging, the credentials helper, access-log redaction, form
+  validators, and error paths in jobs, imports, links, wishlist, and admin routes.
+- Every test run reports coverage; it fails below 94%.
+
 ## 0.8.0 - 2026-10-11
 
 ### Changed

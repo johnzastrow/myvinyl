@@ -41,3 +41,14 @@ select = ["E", "F", "I", "B", "UP", "S"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# Coverage (lines and branches) on every run; the floor is in [tool.coverage.report].
+addopts = "--cov --cov-report=term"
+
+[tool.coverage.run]
+source = ["myvinyl"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
+fail_under = 94  # raise as coverage grows; never lower it

@@ -7,7 +7,7 @@ changes to the code, repo, or docs go in both places.
 Legend: **(decision)** needs an answer before work starts.
 
 ## In progress
-- [ ] Increase test coverage across the app ([#19](https://github.com/johnzastrow/myvinyl/issues/19))
+- (nothing right now)
 
 ## Next up
 - [ ] (decision) Discogs API terms: price freshness and the "not affiliated" notice ([#18](https://github.com/johnzastrow/myvinyl/issues/18))
@@ -30,6 +30,7 @@ Legend: **(decision)** needs an answer before work starts.
 - [ ] Collection-wide value history chart ([#16](https://github.com/johnzastrow/myvinyl/issues/16))
 
 ## Done
+- [x] Test coverage 89% to 96% with a 94% floor ([#19](https://github.com/johnzastrow/myvinyl/issues/19))
 - [x] 0.8.0: per-user Discogs tokens, encrypted at rest; security review fixes ([#3](https://github.com/johnzastrow/myvinyl/issues/3))
 - [x] 0.7.0: upload your own cover ([#1](https://github.com/johnzastrow/myvinyl/issues/1)); edit the barcode or catalog number ([#2](https://github.com/johnzastrow/myvinyl/issues/2))
 - [x] 0.6.1: change usernames, optional email per account, version footer, user guide
