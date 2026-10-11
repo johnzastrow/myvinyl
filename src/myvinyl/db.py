@@ -1243,26 +1243,39 @@ def link_album(
     run_id: int,
     snapshot: dict,
     changes: dict,
-) -> None:
-    """Record the Discogs copy, folder, and date for an album, plus any field changes."""
+    expected: dict | None = None,
+) -> list[str]:
+    """Record the Discogs copy, folder, and date for an album, and apply field changes.
+
+    A change is applied only if the field still holds `expected[field]` (what the sync
+    read), so an edit you saved meanwhile is never overwritten. Returns the fields that
+    were skipped for that reason.
+    """
     if not set(changes) <= SYNC_FIELDS:
         raise ValueError("unknown album field")
-    sets = "".join(f", {column} = ?" for column in changes)  # allowlisted names
+    expected = expected or {}
+    skipped = []
     with connect(path) as conn:
         conn.execute(
-            "UPDATE albums SET discogs_instance_id = ?, discogs_folder_id = ?,"  # noqa: S608
-            " discogs_added_at = ?, discogs_sync_run = ?, discogs_snapshot = ?"
-            f"{sets} WHERE id = ?",
+            "UPDATE albums SET discogs_instance_id = ?, discogs_folder_id = ?,"
+            " discogs_added_at = ?, discogs_sync_run = ?, discogs_snapshot = ? WHERE id = ?",
             [
                 instance_id,
                 folder_id,
                 added_at,
                 run_id,
                 json.dumps(snapshot, sort_keys=True),
-                *changes.values(),
                 album_id,
             ],
         )
+        for column, value in changes.items():
+            cur = conn.execute(
+                f"UPDATE albums SET {column} = ? WHERE id = ? AND {column} IS ?",  # noqa: S608
+                (value, album_id, expected.get(column)),  # (allowlisted column names)
+            )
+            if cur.rowcount == 0:
+                skipped.append(column)
+    return skipped
 
 
 def mark_seen(path: Path, album_id: int, run_id: int) -> None:
@@ -1331,9 +1344,12 @@ def list_sync_items(path: Path, owner_id: int):
 
 
 def get_sync_item(path: Path, owner_id: int, item_id: int):
+    """One of your review items, for an album that isn't in the trash."""
     with connect(path) as conn:
         return conn.execute(
-            "SELECT * FROM sync_items WHERE id = ? AND owner_id = ?", (item_id, owner_id)
+            "SELECT i.* FROM sync_items i JOIN albums a ON a.id = i.album_id"
+            " WHERE i.id = ? AND i.owner_id = ? AND a.deleted_at IS NULL",
+            (item_id, owner_id),
         ).fetchone()
 
 
@@ -1358,6 +1374,19 @@ def log_sync(path: Path, owner_id: int, run_id, album_id, action: str, detail: s
             " VALUES (?, ?, ?, ?, ?)",
             (owner_id, run_id, album_id, action, detail[:500]),
         )
+
+
+SYNC_LOG_KEEP = 2000  # rows per user
+
+
+def prune_sync_log(path: Path) -> int:
+    """Keep the newest SYNC_LOG_KEEP log rows per user; returns how many were removed."""
+    with connect(path) as conn:
+        return conn.execute(
+            "DELETE FROM sync_log WHERE id IN (SELECT id FROM (SELECT id, ROW_NUMBER()"
+            " OVER (PARTITION BY owner_id ORDER BY id DESC) AS n FROM sync_log) WHERE n > ?)",
+            (SYNC_LOG_KEEP,),
+        ).rowcount
 
 
 def list_sync_log(path: Path, owner_id: int, limit: int = 50):

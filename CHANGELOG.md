@@ -29,6 +29,11 @@ All notable changes to myvinyl. Versions follow [semantic versioning](https://se
 - The Import page's public-collection import is now labelled for other people's
   collections; its outdated note about a server token is gone.
 
+### Security
+- Review of the sync code before release: no vulnerabilities; robustness fixes for
+  malformed Discogs data, non-ASCII folder filters, edits made during a sync, and log
+  growth (SECURITY.md).
+
 ### Upgrade notes
 - New columns on `albums` and `users` and new tables (`discogs_folders`, `sync_runs`,
   `sync_items`, `sync_log`) are added automatically on startup.

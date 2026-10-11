@@ -453,6 +453,7 @@ GRADES = {  # Discogs grade text -> myvinyl grade
     "Poor (P)": "P",
 }
 SLEEVE_GRADES = {**GRADES, "Generic": "Generic", "No Cover": "No cover"}
+MAX_ID = 2**63  # SQLite integer range; larger ids from Discogs are rejected
 
 
 def _user_path(username: str) -> str:
@@ -498,11 +499,14 @@ def collection_page(client: DiscogsClient, username: str, page: int) -> tuple[in
 def parse_instance(item: dict, fields: dict[int, str]) -> dict | None:
     """One copy in a Discogs collection, as myvinyl fields; None unless it is vinyl."""
     info = item.get("basic_information")
-    if not isinstance(info, dict) or _int_or_none(info.get("id")) is None or info["id"] <= 0:
+    release_id = _int_or_none(info.get("id")) if isinstance(info, dict) else None
+    if release_id is None or not 0 < release_id < MAX_ID:
         return None
     instance_id = _int_or_none(item.get("instance_id"))
-    if instance_id is None or instance_id <= 0:
+    if instance_id is None or not 0 < instance_id < MAX_ID:
         return None
+    folder_id = _int_or_none(item.get("folder_id"))
+    folder_id = folder_id if folder_id is not None and 0 <= folder_id < MAX_ID else None
     base = _release_fields(info)
     if base is None:
         return None
@@ -513,17 +517,19 @@ def parse_instance(item: dict, fields: dict[int, str]) -> dict | None:
     rating = _int_or_none(item.get("rating"))
     added = _text(item.get("date_added"), 40)
     match = re.fullmatch(r"(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2}:\d{2})([-+]\d{2}:\d{2})?", added)
+    added_at = None
     if match:
         offset = match.group(3) or "+00:00"
-        stamp = datetime.fromisoformat(f"{match.group(1)}T{match.group(2)}{offset}")
-        added = stamp.astimezone(UTC).strftime("%Y-%m-%d %H:%M:%S")
-    else:
-        added = None
+        try:
+            stamp = datetime.fromisoformat(f"{match.group(1)}T{match.group(2)}{offset}")
+            added_at = stamp.astimezone(UTC).strftime("%Y-%m-%d %H:%M:%S")
+        except ValueError:
+            pass  # right shape, impossible date: leave it out
     return {
         **base,
         "instance_id": instance_id,
-        "folder_id": _int_or_none(item.get("folder_id")),
-        "added_at": added,
+        "folder_id": folder_id,
+        "added_at": added_at,
         "condition": GRADES.get(values.get(MEDIA_FIELD, ""), ""),
         "sleeve_condition": SLEEVE_GRADES.get(values.get(SLEEVE_FIELD, ""), ""),
         "notes": values.get(NOTES_FIELD, "").strip(),

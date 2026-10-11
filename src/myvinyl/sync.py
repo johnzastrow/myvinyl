@@ -129,7 +129,11 @@ def apply_copy(
     changes, conflicts = merge(dict(album), copy, base)
     if "notes" in changes:
         changes["notes"] = changes["notes"][:2000]
-    db.link_album(path, album["id"], changes=changes, **link)
+    expected = {field: album[field] for field in changes}
+    # A field you edited while the sync was working is treated as changed in both places.
+    for field in db.link_album(path, album["id"], changes=changes, expected=expected, **link):
+        del changes[field]
+        conflicts.append(field)
     for field in conflicts:
         db.add_sync_item(path, owner_id, album["id"], "conflict", field, copy[field])
         db.log_sync(path, owner_id, run_id, album["id"], "conflict", LABELS[field])
@@ -159,8 +163,10 @@ def run_collection_sync(
     fields = service.collection_fields(username)
     db.set_discogs_folders(path, owner_id, service.collection_folders(username))
     page = run["page"]
+    truncated = False
     while page <= MAX_PAGES:
         pages, items = service.collection_page(username, page)
+        truncated = pages > MAX_PAGES
         db.update_sync_run(path, run_id, pages=min(pages, MAX_PAGES))
         for item in items:
             copy = discogs.parse_instance(item, fields)
@@ -187,5 +193,10 @@ def run_collection_sync(
     missing = db.albums_missing_from_sync(path, owner_id, run_id)
     for album_id in missing:
         db.add_sync_item(path, owner_id, album_id, "removal")
-    db.update_sync_run(path, run_id, state="done")
+    message = (
+        f"Only the first {MAX_PAGES * 100:,} items on Discogs were read; newer ones are left out."
+        if truncated
+        else ""
+    )
+    db.update_sync_run(path, run_id, state="done", message=message)
     log.info("Discogs sync %s for user %s done; %d to confirm", run_id, owner_id, len(missing))

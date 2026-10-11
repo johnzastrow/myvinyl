@@ -16,7 +16,7 @@
   {% if run.state == "running" %}
   <p class="notice">Syncing: page {{ run.page }}{% if run.pages %} of {{ run.pages }}{% endif %}. {{ run.added }} added, {{ run.updated }} updated, {{ run.linked }} matched to albums already here. This page refreshes automatically.</p>
   {% elif run.state == "done" %}
-  <p class="notice">Last sync finished {{ run.finished_at | eastern }}: {{ run.added }} added, {{ run.updated }} updated, {{ run.linked }} matched, {{ run.unchanged }} unchanged{% if run.skipped %}, {{ run.skipped }} skipped (not vinyl, or in your trash){% endif %}.{% if queued %} {{ queued }} albums are waiting for Discogs prices.{% endif %}</p>
+  <p class="notice">Last sync finished {{ run.finished_at | eastern }}: {{ run.added }} added, {{ run.updated }} updated, {{ run.linked }} matched, {{ run.unchanged }} unchanged{% if run.skipped %}, {{ run.skipped }} skipped (not vinyl, or in your trash){% endif %}.{% if run.message %} {{ run.message }}{% endif %}{% if queued %} {{ queued }} albums are waiting for Discogs prices.{% endif %}</p>
   {% else %}
   <p class="notice">The last sync stopped{% if run.message %}: {{ run.message }}{% else %} (the server restarted){% endif %}. {{ run.added }} added so far.</p>
   <form method="post" action="/discogs/sync/{{ run.id }}/resume">

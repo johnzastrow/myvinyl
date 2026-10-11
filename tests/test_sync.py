@@ -346,3 +346,71 @@ def test_snapshot_records_discogs_values(linked, lookup, tmp_path):
     snap = json.loads(albums(tmp_path)[11]["discogs_snapshot"])
     assert snap == {"condition": "NM", "notes": "x", "rating": 3.0, "sleeve_condition": ""}
     assert TOKEN not in json.dumps(snap)
+
+
+# --- Review follow-ups -------------------------------------------------------------------------
+
+
+def test_folder_filter_ignores_non_ascii_digits(authed):
+    assert authed.get("/?folder=²").status_code == 200
+    assert authed.get("/export.csv?folder=²").status_code == 200
+
+
+def test_malformed_discogs_values_are_tolerated():
+    fields = {}
+    item = discogs.parse_instance(copy(1, 2, added="2020-13-45T25:00:00"), fields)
+    assert item is not None and item["added_at"] is None
+    assert discogs.parse_instance({**copy(1, 2), "instance_id": 2**64}, fields) is None
+    assert discogs.parse_instance({**copy(1, 2), "folder_id": 2**64}, fields)["folder_id"] is None
+    huge = copy(1, 2)
+    huge["basic_information"]["id"] = 2**64
+    assert discogs.parse_instance(huge, fields) is None
+
+
+def test_edit_made_during_sync_is_not_overwritten(linked, lookup, tmp_path, monkeypatch):
+    lookup.discogs_pages = [[copy(11, 100, notes="a")]]
+    run_sync(linked)
+    album_id = albums(tmp_path)[11]["id"]
+    real_link = db.link_album
+
+    def edit_then_link(path, album_id_, **kw):
+        # You save new notes after the sync read the album, before it writes.
+        db.set_album_field(path, album_id_, "notes", "my edit")
+        return real_link(path, album_id_, **kw)
+
+    monkeypatch.setattr(db, "link_album", edit_then_link)
+    lookup.discogs_pages = [[copy(11, 100, notes="b")]]
+    run_sync(linked)
+    assert db.get_album(path_of(tmp_path), album_id)["notes"] == "my edit"
+    items = db.list_sync_items(path_of(tmp_path), 1)
+    assert [(i["kind"], i["field"]) for i in items] == [("conflict", "notes")]
+
+
+def test_page_cap_is_reported(linked, lookup, tmp_path, monkeypatch):
+    monkeypatch.setattr(sync, "MAX_PAGES", 1)
+    lookup.discogs_pages = [[copy(11, 100)], [copy(12, 200)]]
+    run_sync(linked)
+    run = db.latest_sync_run(path_of(tmp_path), 1)
+    assert run["state"] == "done" and "Only the first 100 items" in run["message"]
+    assert "Only the first 100 items" in linked.get("/import").text
+    assert set(albums(tmp_path)) == {11}
+
+
+def test_sync_log_is_pruned(linked, tmp_path, monkeypatch):
+    monkeypatch.setattr(db, "SYNC_LOG_KEEP", 2)
+    for i in range(5):
+        db.log_sync(path_of(tmp_path), 1, None, None, "added", str(i))
+    assert "pruned 3 old sync log rows" in linked.app.state.hourly()
+    assert [r["detail"] for r in db.list_sync_log(path_of(tmp_path), 1)] == ["4", "3"]
+
+
+def test_review_items_of_trashed_albums_are_not_actionable(linked, lookup, tmp_path):
+    lookup.discogs_pages = [[copy(11, 100)]]
+    run_sync(linked)
+    lookup.discogs_pages = [[]]
+    run_sync(linked)
+    item = db.list_sync_items(path_of(tmp_path), 1)[0]
+    db.soft_delete(path_of(tmp_path), item["album_id"])
+    token = csrf_from(linked, "/")
+    r = linked.post(f"/discogs/review/{item['id']}", data={"csrf": token, "action": "keep"})
+    assert r.status_code == 404

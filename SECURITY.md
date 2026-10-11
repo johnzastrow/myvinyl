@@ -42,7 +42,13 @@ re-checked and still hold. No Critical or High findings.
   a form, and never while an admin is viewing someone else's collection.
 - Sync is read-only toward Discogs. Review items and runs are scoped to their owner (404
   otherwise); every resolution is logged. One sync runs per user at a time; pages are
-  capped at 200 (20,000 copies, the album cap).
+  capped at 200 (20,000 copies, the album cap), and a sync cut short by the cap says so.
+- A review of the sync code before release found no vulnerabilities; robustness fixes
+  made: the folder filter rejects non-ASCII digits (was a server error); malformed dates
+  or out-of-range ids from Discogs are skipped instead of stopping the sync; a field you
+  edit while a sync runs is never overwritten (the write is conditional, and becomes a
+  conflict); review actions ignore trashed albums; the sync log is pruned to 2,000 rows
+  per user.
 - Discogs responses are type-checked and length-limited before use; dynamic SQL in the
   sync code uses only allowlisted column names with bound values.
 

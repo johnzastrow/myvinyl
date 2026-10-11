@@ -154,7 +154,7 @@ def parse_filters(params) -> tuple[db.Filters, dict[str, str]]:
         min_rating=rating,
         min_value=low,
         max_value=high,
-        folder=int(raw["folder"]) if raw["folder"].isdigit() and len(raw["folder"]) < 10 else None,
+        folder=positive_int(raw["folder"]),
     )
     clean = {k: v for k, v in raw.items() if v and getattr(f, k) not in ("", None)}
     return f, clean
@@ -367,6 +367,9 @@ def create_app(
                 queue_wish(wish_id, BULK)
             if albums or wishes:
                 done.append(f"queued {len(albums)} albums and {len(wishes)} wishes for refresh")
+        pruned = db.prune_sync_log(path)
+        if pruned:
+            done.append(f"pruned {pruned} old sync log rows")
         if settings.trash_days > 0:
             old = db.trash_due(path, settings.trash_days)
             for album_id in old:
